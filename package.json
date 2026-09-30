@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "convert-source-map": "^2.0.0",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.4",
     "nyc": "^18.0.0",
     "v8-to-istanbul": "^9.3.0"
   },
