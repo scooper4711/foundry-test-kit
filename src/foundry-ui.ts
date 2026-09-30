@@ -24,11 +24,11 @@ export function setupTab(page: Page, name: "Game Worlds" | "Game Systems"): Loca
 
 /**
  * An installed package in the setup lists (li.package with data-package-id
- * on 12–14). Only valid while the installer is closed,
- * since the installer's entries share the id.
+ * on 12–14). Only valid while the installer is closed, since the
+ * installer's entries share the id.
  */
 export function installedPackage(page: Page, packageId: string): Locator {
-  return page.locator(`[data-package-id='${packageId}']`).first();
+  return page.locator(`[data-package-id='${packageId}']:visible`).first();
 }
 
 /**
@@ -46,10 +46,11 @@ export function installerFilter(page: Page): Locator {
 /**
  * A package's entry in the open installer. The installer renders after the
  * setup list, whose entry for an installed package shares the id, so take
- * the last match.
+ * the last visible match: 13 also lists a package in each of its category
+ * tabs, and those copies stay hidden.
  */
 export function installerPackage(page: Page, packageId: string): Locator {
-  return page.locator(`[data-package-id='${packageId}']`).last();
+  return page.locator(`[data-package-id='${packageId}']:visible`).last();
 }
 
 /**
