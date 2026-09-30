@@ -3,7 +3,7 @@
  * key, EULA, and administrator login, in whatever order Foundry asks.
  */
 import type { Page } from "@playwright/test";
-import { dismissOverlays, ensureAdminAccess } from "../overlays.js";
+import { adminPasswordField, dismissOverlays, ensureAdminAccess } from "../overlays.js";
 import { log, type SeedOptions } from "./options.js";
 
 const MAX_ATTEMPTS = 5;
@@ -64,8 +64,8 @@ async function handleLicensePage(page: Page, licenseKey: string): Promise<boolea
 
 async function logInAsAdmin(page: Page, adminPassword: string): Promise<void> {
   log("-> Logging in as admin...");
-  const passwordField = page.getByRole("textbox", { name: "Administrator Password" });
+  const passwordField = adminPasswordField(page);
   await passwordField.fill(adminPassword);
-  await page.getByRole("button", { name: "Log In" }).click();
+  await passwordField.press("Enter");
   await passwordField.waitFor({ state: "hidden", timeout: 30_000 }).catch(() => {});
 }

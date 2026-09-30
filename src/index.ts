@@ -12,7 +12,7 @@ export {
   type FoundryWorkerFixtures,
 } from "./fixtures.js";
 export { FOUNDRY_VIEWPORT, testBaseUrl, suiteContextOptions, disableSceneCanvas } from "./context.js";
-export { dismissTours, dismissOverlays, ensureAdminAccess } from "./overlays.js";
+export { adminPasswordField, dismissTours, dismissOverlays, ensureAdminAccess } from "./overlays.js";
 export {
   waitForGameReady,
   enterGameAsGamemaster,

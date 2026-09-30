@@ -3,7 +3,16 @@
  * dialogs) and administrator password prompts. These appear on a clean data
  * directory but never on the second run, the classic clean-checkout flake.
  */
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+
+/**
+ * The administrator password input on /auth or the admin prompt over setup.
+ * Matched by its name, which is stable across Foundry 13 and 14 (the label
+ * is a placeholder in 13 and an aria-label in 14); Enter submits its form.
+ */
+export function adminPasswordField(page: Page): Locator {
+  return page.locator('input[name="adminPassword"]:visible').first();
+}
 
 /** Button labels that unambiguously dismiss (never accept) a popup. */
 const DISMISS_BUTTON_NAMES = [
@@ -111,7 +120,7 @@ export async function dismissOverlays(page: Page): Promise<void> {
 export async function ensureAdminAccess(page: Page, password: string): Promise<void> {
   const deadline = Date.now() + 120_000;
   for (;;) {
-    const field = page.getByRole("textbox", { name: "Administrator Password" });
+    const field = adminPasswordField(page);
     const visible = await field.isVisible({ timeout: 2000 }).catch(() => false);
     if (!visible) {
       // Re-check once after a beat: the dialog can pop late.
@@ -122,10 +131,7 @@ export async function ensureAdminAccess(page: Page, password: string): Promise<v
       return;
     }
     await field.fill(password);
-    const login = page.getByRole("button", { name: "Log In" });
-    if (await login.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await login.click().catch(() => {});
-    }
+    await field.press("Enter").catch(() => {});
     await field.waitFor({ state: "hidden", timeout: 15_000 }).catch(() => {});
     if (Date.now() > deadline) {
       throw new Error("administrator access prompt never cleared");

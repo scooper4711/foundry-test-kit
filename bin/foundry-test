@@ -416,7 +416,9 @@ world_system() {
 }
 
 # Runs the Playwright project for the selected world's game system,
-# starting the server (or switching it to this world) first.
+# starting the server (or switching it to this world) first. The test
+# outcome goes to WORLD_TEST_STATUS so the function itself returns normally:
+# under `set -e`, a failed download, unpack, or seed still stops the run.
 run_world_suite() {
   if pid_alive "$(read_pidfile)"; then
     if [ "$CLEAN" -eq 1 ] || [ "$(running_world)" != "$WORLD_ID" ]; then
@@ -433,7 +435,7 @@ run_world_suite() {
     STARTED_BY_ME=1
   fi
   seed_if_needed
-  local system result_json status
+  local system result_json
   system="$(world_system)"
   result_json="$WORK_DIR/logs/results-$MODE-$VERSION-$WORLD_ID.json"
   rm -f "$result_json"
@@ -444,10 +446,9 @@ run_world_suite() {
   FOUNDRY_WORLD="$WORLD_ID" \
   PLAYWRIGHT_JSON_OUTPUT_NAME="$result_json" \
     npx playwright test --project="$system" --reporter=json,line
-  status=$?
+  WORLD_TEST_STATUS=$?
   set -e
   kit_node cli/summarize.js "$result_json" || true
-  return "$status"
 }
 
 case "$ACTION" in
@@ -479,10 +480,12 @@ case "$ACTION" in
         WORLD_DIR_NAME="$WORLD_ID"
         WORLD_TITLE="$(kit_node cli/shell-config.js world "$WORLD_ID" title)"
         export FOUNDRY_WORLD_SYSTEM="${entry##*:}"
-        run_world_suite || TEST_EXIT=1
+        run_world_suite
+        if [ "$WORLD_TEST_STATUS" -ne 0 ]; then TEST_EXIT=1; fi
       done
     else
-      run_world_suite || TEST_EXIT=$?
+      run_world_suite
+      TEST_EXIT="$WORLD_TEST_STATUS"
     fi
     trap - EXIT INT TERM
     cleanup_on_exit
