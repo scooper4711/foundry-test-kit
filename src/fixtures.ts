@@ -8,7 +8,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 import { loadTestKitConfig } from "./config.js";
-import { disableSceneCanvas, suiteContextOptions } from "./context.js";
+import { disableSceneCanvas, suiteContextOptions, testBaseUrl } from "./context.js";
 import { coverageChunkName, startCoverage, stopCoverage } from "./coverage.js";
 import { enterGameAsGamemaster, joinAsGamemaster } from "./session.js";
 import { gameSystemId } from "./world.js";
@@ -40,7 +40,10 @@ export const test = base.extend<FoundryTestOptions & FoundryTestFixtures, Foundr
       const config = loadTestKitConfig();
       const sessionDirectory = resolve(config.workDir, "sessions");
       mkdirSync(sessionDirectory, { recursive: true });
-      const statePath = resolve(sessionDirectory, `gamemaster-${workerInfo.workerIndex}.json`);
+      // Keyed by port too, so runs against different servers at once (say,
+      // two Foundry versions) never read each other's session.
+      const port = new URL(testBaseUrl()).port;
+      const statePath = resolve(sessionDirectory, `gamemaster-${port}-${workerInfo.workerIndex}.json`);
       const context = await browser.newContext(suiteContextOptions());
       await disableSceneCanvas(context);
       try {

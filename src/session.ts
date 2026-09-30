@@ -2,8 +2,9 @@
  * Joining a Foundry world as a given user and waiting for the game to be
  * ready, plus making sure the module under test is enabled.
  */
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 import { disableSceneCanvas, suiteContextOptions } from "./context.js";
+import { joinButton, joinUserDropdown, joinUserSuggestion, joinUserTextbox } from "./foundry-ui.js";
 import { dismissOverlays } from "./overlays.js";
 
 const GAME_READY_TIMEOUT_MS = 90_000;
@@ -56,13 +57,8 @@ export async function withGamemasterPage<T>(
 /** Joins the world as a passwordless non-GM user. */
 export async function joinAsPlayer(page: Page, userName: string): Promise<void> {
   await page.goto("/join");
-  const userSelect = page.getByRole("textbox", { name: "Select User" });
-  await userSelect.fill(userName);
-  await page.locator("#autocomplete li", { hasText: new RegExp(`^${userName}$`) }).click();
-  await Promise.all([
-    page.waitForURL(/\/game/, { waitUntil: "commit" }),
-    page.getByRole("button", { name: "Join Game Session" }).click(),
-  ]);
+  await selectJoinUser(page, userName);
+  await Promise.all([page.waitForURL(/\/game/, { waitUntil: "commit" }), joinButton(page).click()]);
   await waitForGameReady(page);
   await dismissOverlays(page);
 }
@@ -102,39 +98,47 @@ export async function ensureModuleActive(page: Page, moduleId: string): Promise<
 
 /** Joins the world as the passwordless Gamemaster, from the /join page. */
 export async function joinAsGamemaster(page: Page): Promise<void> {
-  await selectGamemaster(page);
+  await selectJoinUser(page, "Gamemaster");
   // Click Join (waits for the button to actually enable).
-  const joinButton = page.getByRole("button", { name: "Join Game Session" });
-  await joinButton.waitFor({ state: "visible", timeout: 15_000 });
-  await Promise.all([page.waitForURL(/\/game/, { timeout: 90_000, waitUntil: "commit" }), joinButton.click()]);
+  const join = joinButton(page);
+  await join.waitFor({ state: "visible", timeout: 15_000 });
+  await Promise.all([page.waitForURL(/\/game/, { timeout: 90_000, waitUntil: "commit" }), join.click()]);
   await waitForReadyPastPasswordPrompt(page);
   await dismissOverlays(page);
 }
 
 /**
- * Selects Gamemaster in the join form's user autocomplete. The option is an
- * <li> inside #autocomplete (NOT the wrapping <menu>, whose text also
- * matches) — clicking the wrapper selects nothing and Join silently does
- * nothing.
+ * Picks the user on the join form: a <select> on Foundry 12, an autocomplete
+ * textbox on 13+. Waits for either, since the form renders after page load.
  */
-async function selectGamemaster(page: Page): Promise<void> {
-  const userSelect = page.getByRole("textbox", { name: "Select User" });
-  // waitFor (not isVisible): the form renders async after page load, and
-  // isVisible() does not wait — gating on it skips user selection entirely.
-  await userSelect.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {});
-  if (!(await userSelect.isVisible().catch(() => false))) return;
-  await userSelect.click().catch(() => {});
-  await userSelect.fill("Gamemaster");
+async function selectJoinUser(page: Page, userName: string): Promise<void> {
+  const userDropdown = joinUserDropdown(page);
+  const userTextbox = joinUserTextbox(page);
+  await userDropdown
+    .or(userTextbox)
+    .first()
+    .waitFor({ state: "visible", timeout: 30_000 })
+    .catch(() => {});
+  if (await userDropdown.isVisible().catch(() => false)) {
+    await userDropdown.selectOption({ label: userName });
+    return;
+  }
+  if (await userTextbox.isVisible().catch(() => false)) await chooseAutocompleteUser(page, userTextbox, userName);
+}
+
+/** Chooses the user from the join autocomplete (13+). */
+async function chooseAutocompleteUser(page: Page, userTextbox: Locator, userName: string): Promise<void> {
+  await userTextbox.click().catch(() => {});
+  await userTextbox.fill(userName);
   // click() auto-waits for the suggestion; isVisible() would not.
-  const selected = await page
-    .locator("#autocomplete li", { hasText: /^Gamemaster$/ })
+  const selected = await joinUserSuggestion(page, userName)
     .click({ timeout: 10_000 })
     .then(() => true)
     .catch(() => false);
   if (!selected) {
     // Fallback: keyboard-select the highlighted suggestion.
-    await userSelect.press("ArrowDown").catch(() => {});
-    await userSelect.press("Enter").catch(() => {});
+    await userTextbox.press("ArrowDown").catch(() => {});
+    await userTextbox.press("Enter").catch(() => {});
   }
 }
 
