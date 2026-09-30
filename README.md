@@ -345,6 +345,26 @@ npx foundry-test test run --all-worlds --version latest-13
 npx foundry-test test run --all-worlds --version latest
 ```
 
+To make that automatic, run it from a pre-tag hook. Git has no hook that fires
+on `git tag`, but a release script can run one right before it tags, so a
+failing suite stops the release before any tag exists:
+
+```bash
+# in your release script, just before `git tag "$NEXT_TAG"`
+if [[ -x .husky/pre-tag ]]; then
+  .husky/pre-tag "$NEXT_TAG" || { echo "pre-tag hook failed; $NEXT_TAG not created."; exit 1; }
+fi
+```
+
+```sh
+#!/usr/bin/env sh
+# .husky/pre-tag: the integration suite on each Foundry major the module supports
+set -e
+npm run build
+npx foundry-test test run --all-worlds --version latest-13
+npx foundry-test test run --all-worlds --version latest
+```
+
 ### If you do run it in CI
 
 Get the caching right before you let it run regularly:
