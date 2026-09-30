@@ -422,21 +422,32 @@ seed_marker() {
   echo "$DATA_DIR/.seeded-$WORLD_DIR_NAME"
 }
 
-# Foundry 13+ binds the signed license to the machine, so a data directory
-# restored from a CI cache on another runner starts unlicensed. The server
+# Foundry binds the signed license to the machine, so a data directory
+# restored from a CI cache on another runner starts unlicensed; the server
 # logs the verification result at startup.
 license_verified() {
-  ! grep -q "license verification failed" "$LOG_FILE" 2>/dev/null
+  [ -f "$DATA_DIR/Config/license.json" ] &&
+    ! grep -q "license verification failed" "$LOG_FILE" 2>/dev/null
+}
+
+# Drops the other machine's license and restarts, so Foundry shows the
+# fresh-install key form (Foundry 14's /license page is blank while a
+# foreign license.json is present); seeding then re-enters the key.
+relicense_server() {
+  echo "License not valid on this machine (data dir restored from elsewhere?) — re-licensing."
+  do_stop
+  rm -f "$DATA_DIR/Config/license.json"
+  do_start
 }
 
 seed_if_needed() {
   if [ -z "$WORLD_ID" ]; then return 0; fi
-  if [ -f "$(seed_marker)" ] && license_verified; then
-    echo "World $WORLD_DIR_NAME already seeded — skipping seed."
-    return 0
-  fi
   if [ -f "$(seed_marker)" ]; then
-    echo "License not valid on this machine (data dir restored from elsewhere?) — re-seeding to re-license."
+    if license_verified; then
+      echo "World $WORLD_DIR_NAME already seeded — skipping seed."
+      return 0
+    fi
+    relicense_server
   fi
   if [ -z "${FOUNDRY_LICENSE_KEY:-}" ]; then
     echo "ERROR: fresh data dir needs FOUNDRY_LICENSE_KEY (seeding $WORLD_DIR_NAME)." >&2
