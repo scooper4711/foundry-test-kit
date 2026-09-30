@@ -1,0 +1,22 @@
+MSG_FILE="$1"
+TMP_FILE="$MSG_FILE.tmp"
+grep -viE '^Co-Authored-By:' "$MSG_FILE" > "$TMP_FILE"
+mv "$TMP_FILE" "$MSG_FILE"
+
+SUBJECT=$(grep -v '^#' "$MSG_FILE" | head -n 1)
+case "$SUBJECT" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*) exit 0 ;;
+esac
+if ! printf '%s\n' "$SUBJECT" | grep -qE '^(feat|fix|refactor|docs|chore|test|style)(\([a-z0-9-]+\))?!?: [^ ]'; then
+  echo "commit-msg: subject must be '<type>: <Imperative subject>'" >&2
+  echo "  types: feat fix refactor docs chore test style" >&2
+  echo "  got:   $SUBJECT" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$SUBJECT" | grep -qE '^[^:]+: [A-Z]'; then
+  echo "commit-msg: warning: capitalize the subject after the type prefix" >&2
+fi
+if [ "${#SUBJECT}" -gt 72 ]; then
+  echo "commit-msg: subject is ${#SUBJECT} chars (max 72)" >&2
+  exit 1
+fi
