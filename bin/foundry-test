@@ -422,11 +422,21 @@ seed_marker() {
   echo "$DATA_DIR/.seeded-$WORLD_DIR_NAME"
 }
 
+# Foundry 13+ binds the signed license to the machine, so a data directory
+# restored from a CI cache on another runner starts unlicensed. The server
+# logs the verification result at startup.
+license_verified() {
+  ! grep -q "license verification failed" "$LOG_FILE" 2>/dev/null
+}
+
 seed_if_needed() {
   if [ -z "$WORLD_ID" ]; then return 0; fi
-  if [ -f "$(seed_marker)" ]; then
+  if [ -f "$(seed_marker)" ] && license_verified; then
     echo "World $WORLD_DIR_NAME already seeded — skipping seed."
     return 0
+  fi
+  if [ -f "$(seed_marker)" ]; then
+    echo "License not valid on this machine (data dir restored from elsewhere?) — re-seeding to re-license."
   fi
   if [ -z "${FOUNDRY_LICENSE_KEY:-}" ]; then
     echo "ERROR: fresh data dir needs FOUNDRY_LICENSE_KEY (seeding $WORLD_DIR_NAME)." >&2
