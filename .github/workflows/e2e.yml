@@ -5,9 +5,18 @@ name: E2E
 on:
   push:
     branches: [main]
+    paths-ignore: ["**/*.md"]
   pull_request:
     branches: [main]
+    paths-ignore: ["**/*.md"]
   workflow_dispatch:
+
+# Each run downloads Foundry from foundryvtt.com on a cache miss, and several
+# at once get rate limited (429): a newer push to the same branch cancels
+# the run it supersedes.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   e2e:
@@ -40,14 +49,21 @@ jobs:
         id: foundry
         run: echo "version=$(../../bin/foundry-test resolve ${{ matrix.foundry }})" >> "$GITHUB_OUTPUT"
 
-      - name: Cache Foundry build and seeded world
+      # The Foundry build depends only on the version, so it is cached on its
+      # own and downloaded once per version rather than per config change.
+      - name: Cache Foundry build
         uses: actions/cache@v6
         with:
           path: |
             e2e/fixture-module/.foundry-test/cache/FoundryVTT-Node-${{ steps.foundry.outputs.version }}.zip
             e2e/fixture-module/.foundry-test/versions/${{ steps.foundry.outputs.version }}
-            e2e/fixture-module/.foundry-test/Data-test-${{ steps.foundry.outputs.version }}
-          key: e2e-foundry-${{ steps.foundry.outputs.version }}-${{ hashFiles('e2e/fixture-module/foundry-test.config.json') }}
+          key: foundry-build-${{ steps.foundry.outputs.version }}
+
+      - name: Cache seeded world
+        uses: actions/cache@v6
+        with:
+          path: e2e/fixture-module/.foundry-test/Data-test-${{ steps.foundry.outputs.version }}
+          key: e2e-data-${{ steps.foundry.outputs.version }}-${{ hashFiles('e2e/fixture-module/foundry-test.config.json') }}
 
       - name: Seed and test
         # The spec checks that the running server is the resolved major.
@@ -58,6 +74,13 @@ jobs:
           FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
           FOUNDRY_USERNAME: ${{ secrets.FOUNDRY_USERNAME }}
           FOUNDRY_PASSWORD: ${{ secrets.FOUNDRY_PASSWORD }}
+
+      # Caches are saved after the last step. The license is tied to this
+      # runner, so a restored copy is useless (the kit re-licenses), and
+      # leaving it out keeps it from anyone who can read the cache.
+      - name: Remove license before caching
+        if: always()
+        run: rm -f .foundry-test/Data-test-*/Config/license.json
 
       - name: Upload failure evidence
         if: failure()

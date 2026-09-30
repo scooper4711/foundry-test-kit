@@ -327,6 +327,11 @@ on:
   pull_request:
     branches: [main]
 
+# A newer push to the same branch cancels the run it supersedes.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   integration:
     runs-on: ubuntu-latest
@@ -348,14 +353,19 @@ jobs:
         id: foundry
         run: echo "version=$(npx foundry-test resolve ${{ matrix.foundry }})" >> "$GITHUB_OUTPUT"
 
-      - name: Cache Foundry build and seeded worlds
+      - name: Cache Foundry build
         uses: actions/cache@v6
         with:
           path: |
             .foundry-test/cache/FoundryVTT-Node-${{ steps.foundry.outputs.version }}.zip
             .foundry-test/versions/${{ steps.foundry.outputs.version }}
-            .foundry-test/Data-test-${{ steps.foundry.outputs.version }}
-          key: foundry-${{ steps.foundry.outputs.version }}-${{ hashFiles('foundry-test.config.json') }}
+          key: foundry-build-${{ steps.foundry.outputs.version }}
+
+      - name: Cache seeded worlds
+        uses: actions/cache@v6
+        with:
+          path: .foundry-test/Data-test-${{ steps.foundry.outputs.version }}
+          key: foundry-data-${{ steps.foundry.outputs.version }}-${{ hashFiles('foundry-test.config.json') }}
 
       - name: Integration tests
         run: npx foundry-test test run --all-worlds --version ${{ steps.foundry.outputs.version }}
@@ -373,10 +383,30 @@ jobs:
         with:
           name: playwright-results-${{ steps.foundry.outputs.version }}
           path: test-results/
+
+      # Caches are saved after the last step: keep the license out of them.
+      - name: Remove license before caching
+        if: always()
+        run: rm -f .foundry-test/Data-test-*/Config/license.json
 ```
 
-The cache key includes the resolved version, so a new Foundry release is
-downloaded and seeded once, then reused.
+The Foundry build is cached by version alone and the seeded worlds by version
+and config, so a new Foundry release is downloaded once, and a config change
+re-seeds without downloading Foundry again.
+
+foundryvtt.com rate limits downloads (HTTP 429) when several jobs fetch builds
+at once. The kit waits and retries (honouring `Retry-After`), and the caches
+and `concurrency` group above keep downloads rare. A seeded data directory
+restored from the cache on another runner is re-licensed automatically, since
+Foundry ties its license to the machine.
+
+Pull requests from forks can restore the default branch's caches and run their
+own version of the workflow. The last step therefore deletes the signed
+`license.json` before the caches are saved; the license key itself only reaches
+jobs as a secret, which fork PRs never get. In a public repository, also require
+approval for workflows from all outside contributors (Settings → Actions →
+General → "Require approval for all external contributors"), so no one else's
+workflow can read the cached Foundry build.
 
 Secrets from pull requests opened from forks are not available to workflows,
 so forked PRs cannot run this job; gate it with

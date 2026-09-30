@@ -9,7 +9,11 @@ import {
   downloadFile,
   downloadFoundryBuild,
   extractCsrfToken,
+  isRetryable,
+  releaseFailure,
+  retryDelay,
   type Fetch,
+  type RetryPolicy,
 } from "../src/download/foundryvtt.js";
 
 const HOME_PAGE = `<form><input type="hidden" name="csrfmiddlewaretoken" value="form-token-123"></form>`;
@@ -21,7 +25,9 @@ interface Call {
 }
 
 /** A fake foundryvtt.com: records calls and answers each route. */
-function fakeSite(options: { acceptLogin?: boolean; releaseStatus?: number } = {}): { fetch: Fetch; calls: Call[] } {
+function fakeSite(
+  options: { acceptLogin?: boolean; releaseStatus?: number; releaseStatuses?: number[]; retryAfter?: string } = {}
+): { fetch: Fetch; calls: Call[] } {
   const calls: Call[] = [];
   const fetchImpl = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = String(input);
@@ -35,8 +41,12 @@ function fakeSite(options: { acceptLogin?: boolean; releaseStatus?: number } = {
       return new Response(null, { status: 302, headers });
     }
     if (url.includes("/releases/download")) {
-      const status = options.releaseStatus ?? 200;
-      return new Response(status === 200 ? JSON.stringify({ url: PRESIGNED, lifetime: 300 }) : "", { status });
+      const status = options.releaseStatuses?.shift() ?? options.releaseStatus ?? 200;
+      const headers = options.retryAfter ? { "Retry-After": options.retryAfter } : undefined;
+      return new Response(status === 200 ? JSON.stringify({ url: PRESIGNED, lifetime: 300 }) : "", {
+        status,
+        headers,
+      });
     }
     if (url === PRESIGNED) return new Response("zip-bytes");
     return new Response("not found", { status: 404 });
@@ -104,9 +114,56 @@ describe("FoundrySession", () => {
   it("reports a build the account cannot download", async () => {
     const session = new FoundrySession(fakeSite({ releaseStatus: 403 }).fetch);
     await session.logIn({ username: "gm", password: "pw" });
-    await expect(session.releaseUrl("14.999")).rejects.toThrow(/returned 403/);
+    await expect(session.releaseUrl("14.999")).rejects.toThrow(/returned 403.*licensed/);
+  });
+
+  it("waits out rate limiting, honouring Retry-After", async () => {
+    const retry = recordingRetry();
+    const site = fakeSite({ releaseStatuses: [429, 503], retryAfter: "7" });
+    const session = new FoundrySession(site.fetch, undefined, retry.policy);
+    await session.logIn({ username: "gm", password: "pw" });
+    expect(await session.releaseUrl("14.367")).toBe(PRESIGNED);
+    expect(retry.waits).toEqual([7000, 7000]);
+  });
+
+  it("gives up after its attempts and says it was rate limited", async () => {
+    const retry = recordingRetry();
+    const session = new FoundrySession(fakeSite({ releaseStatus: 429 }).fetch, undefined, retry.policy);
+    await session.logIn({ username: "gm", password: "pw" });
+    await expect(session.releaseUrl("12.343")).rejects.toThrow(/rate limiting downloads \(429\)/);
+    expect(retry.waits).toEqual([1000, 2000]);
   });
 });
+
+describe("retry helpers", () => {
+  it("retries rate limiting and server errors only", () => {
+    expect([429, 500, 503, 200, 302, 403, 404].map(isRetryable)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it("backs off exponentially without Retry-After, and caps long waits", () => {
+    expect(retryDelay(new Response(null, { status: 429 }), 3, 30_000)).toBe(120_000);
+    const patient = new Response(null, { status: 429, headers: { "Retry-After": "3600" } });
+    expect(retryDelay(patient, 1, 30_000)).toBe(300_000);
+  });
+
+  it("explains other release failures by status", () => {
+    expect(releaseFailure(500, "14.1")).toBe("releaseUrl: foundryvtt.com returned 500 for build 14.1");
+  });
+});
+
+/** A three-attempt retry policy that records its waits instead of sleeping. */
+function recordingRetry(): { policy: RetryPolicy; waits: number[] } {
+  const waits: number[] = [];
+  return { waits, policy: { attempts: 3, baseDelayMs: 1000, sleep: async (ms) => void waits.push(ms) } };
+}
 
 describe("downloadFoundryBuild", () => {
   it("saves the build to the destination", async () => {
