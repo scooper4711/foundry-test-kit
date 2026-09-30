@@ -58,22 +58,63 @@ export function extractCsrfToken(html: string): string {
   return token;
 }
 
+/**
+ * How requests ride out foundryvtt.com rate limiting (429) and server
+ * errors: several CI jobs downloading at once is enough to trigger it.
+ */
+export interface RetryPolicy {
+  attempts: number;
+  /** First backoff; doubles per retry unless the site sends Retry-After. */
+  baseDelayMs: number;
+  sleep: (milliseconds: number) => Promise<void>;
+}
+
+export const DEFAULT_RETRY: RetryPolicy = {
+  attempts: 4,
+  baseDelayMs: 30_000,
+  sleep: (milliseconds) => new Promise((done) => setTimeout(done, milliseconds)),
+};
+
+/** The longest wait the kit accepts from a Retry-After header. */
+const MAX_RETRY_DELAY_MS = 300_000;
+
+/** Whether a status is worth retrying: rate limited, or a transient server error. */
+export function isRetryable(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/** The wait before retry number `retry` (1-based): Retry-After seconds when given, else backoff. */
+export function retryDelay(response: Response, retry: number, baseDelayMs: number): number {
+  const retryAfter = Number(response.headers.get("retry-after"));
+  const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelayMs * 2 ** (retry - 1);
+  return Math.min(delay, MAX_RETRY_DELAY_MS);
+}
+
 /** A foundryvtt.com session: requests carry the jar's cookies. */
 export class FoundrySession {
   constructor(
     private readonly fetchImpl: Fetch = fetch,
-    readonly cookies: CookieJar = new CookieJar()
+    readonly cookies: CookieJar = new CookieJar(),
+    private readonly retry: RetryPolicy = DEFAULT_RETRY
   ) {}
 
-  /** Requests a site path with the session's cookies, without following redirects. */
+  /**
+   * Requests a site path with the session's cookies, without following
+   * redirects, retrying rate-limited and server-error responses.
+   */
   async request(path: string, init: RequestInit = {}): Promise<Response> {
-    const response = await this.fetchImpl(`${FOUNDRY_SITE}${path}`, {
-      ...init,
-      redirect: "manual",
-      headers: { Referer: `${FOUNDRY_SITE}/`, Cookie: this.cookies.header(), ...init.headers },
-    });
-    this.cookies.store(response);
-    return response;
+    for (let attempt = 1; ; attempt++) {
+      const response = await this.fetchImpl(`${FOUNDRY_SITE}${path}`, {
+        ...init,
+        redirect: "manual",
+        headers: { Referer: `${FOUNDRY_SITE}/`, Cookie: this.cookies.header(), ...init.headers },
+      });
+      this.cookies.store(response);
+      if (!isRetryable(response.status) || attempt >= this.retry.attempts) return response;
+      const delay = retryDelay(response, attempt, this.retry.baseDelayMs);
+      console.log(`foundryvtt.com returned ${response.status} for ${path}; retrying in ${Math.round(delay / 1000)}s`);
+      await this.retry.sleep(delay);
+    }
   }
 
   /** Logs in; throws when the site does not grant a session. */
@@ -103,15 +144,22 @@ export class FoundrySession {
     const response = await this.request(
       `/releases/download?build=${buildNumber(version)}&platform=node&response_type=json`
     );
-    if (response.status !== 200) {
-      throw new Error(
-        `releaseUrl: foundryvtt.com returned ${response.status} for build ${version}; is it licensed to this account?`
-      );
-    }
+    if (response.status !== 200) throw new Error(releaseFailure(response.status, version));
     const body = (await response.json()) as { url?: string };
     if (!body.url) throw new Error(`releaseUrl: no download URL in the response for build ${version}`);
     return body.url;
   }
+}
+
+/** Explains a failed release request by what its status means. */
+export function releaseFailure(status: number, version: string): string {
+  if (status === 429) {
+    return `releaseUrl: foundryvtt.com is rate limiting downloads (429) for build ${version}; wait a few minutes and rerun`;
+  }
+  if (status === 403 || status === 404) {
+    return `releaseUrl: foundryvtt.com returned ${status} for build ${version}; is it licensed to this account?`;
+  }
+  return `releaseUrl: foundryvtt.com returned ${status} for build ${version}`;
 }
 
 /** Streams a URL to `destination`, via a temporary file so partial downloads never land. */
