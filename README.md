@@ -256,9 +256,11 @@ Things to know about Foundry 12:
   of `globalThis` there. In `page.evaluate`, reach them through `CONFIG` —
   `CONFIG.Actor.documentClass.create(...)` — which works on every version.
 
-The kit's own CI seeds a Simple Worldbuilding world with a fixture module and
-runs its specs on `latest-12`, `latest-13` and `latest` (see
-`.github/workflows/e2e.yml` and `e2e/fixture-module/`).
+The kit's own E2E workflow seeds a Simple Worldbuilding world with a fixture
+module and runs its specs on `latest-12`, `latest-13` and `latest`, when a
+release is published and when run by hand (see `.github/workflows/e2e.yml` and
+`e2e/fixture-module/`). Changes to the browser-driven code are checked locally
+with `npm run e2e`, or by running the workflow by hand on the branch.
 
 ## Write tests
 
@@ -311,23 +313,117 @@ Other helpers: `joinAsGamemaster`, `testUser`, `enterGameAsGamemaster`, `waitFor
 `updateActor`, `readActorFlag`, `assignCharacterToUser`, `renderActorSheet`,
 `closeAllSheets`, `gameSystemId`, `startCoverage`/`stopCoverage`.
 
-## GitHub Actions
+## Continuous integration
+
+**Please don't run this in hosted CI (GitHub Actions and the like) unless you
+really need to.** A CI job without a working cache downloads a full Foundry
+build from foundryvtt.com every time it runs, and serving those downloads costs
+Foundry Gaming money. The Foundry community moderators have asked module
+developers not to set this up casually: a misconfigured cache on a busy
+repository means a download on every push. Running the suite on your own
+machine before you release covers most needs (see [Before a release](#before-a-release)).
+
+### How often the kit downloads Foundry
+
+- At most one download per `foundry-test` run: only when
+  `.foundry-test/cache/FoundryVTT-Node-<version>.zip` is missing. The file
+  transfer is never retried; if it fails, the partial file is deleted and the
+  command stops.
+- The login and download-link requests before it are retried up to four times
+  each, and only when foundryvtt.com answers 429 (rate limited) or with a server
+  error, waiting 30, 60 and 120 seconds (or as long as the site asks).
+- Seeding retries, `--all-worlds`, and later runs reuse the zip on disk.
+
+So the count to watch is how many runs start without the zip: on your machine
+that's once per Foundry version; in CI it's every job whose cache misses.
+
+### Before a release
+
+Run the suite locally before you tag a release, once per Foundry major you
+support. Your machine downloads each Foundry version once and keeps it.
+
+```bash
+npx foundry-test test run --all-worlds --version latest-13
+npx foundry-test test run --all-worlds --version latest
+```
+
+To make that automatic, run it from a pre-tag hook. Git has no hook that fires
+on `git tag`, but a release script can run one right before it tags, so a
+failing suite stops the release before any tag exists:
+
+```bash
+# in your release script, just before `git tag "$NEXT_TAG"`
+if [[ -x .husky/pre-tag ]]; then
+  .husky/pre-tag "$NEXT_TAG" || { echo "pre-tag hook failed; $NEXT_TAG not created."; exit 1; }
+fi
+```
+
+```sh
+#!/usr/bin/env sh
+# .husky/pre-tag: the integration suite on each Foundry major the module supports
+set -e
+npm run build
+npx foundry-test test run --all-worlds --version latest-13
+npx foundry-test test run --all-worlds --version latest
+```
+
+### If you do run it in CI
+
+Get the caching right before you let it run regularly:
+
+- **Trigger it rarely:** on published releases and by hand (`workflow_dispatch`),
+  not on every push or pull request. Keep the version matrix to the majors you
+  support.
+- **Cache the Foundry build by version alone**, in its own cache entry
+  (`foundry-build-<version>` below), separate from the seeded worlds. A key that
+  includes anything else (a config hash, a date, the commit) downloads Foundry
+  again every time that part changes.
+- **Check the second run.** Its log must show
+  `Cache restored from key: foundry-build-…` and must not show
+  `Downloading Foundry VTT`. If it downloads again, fix the cache before
+  running it any more.
+- **Fill the cache from the default branch.** A workflow that only runs on
+  releases never reuses its own caches (see
+  [Why release runs need a manual run on main](#why-release-runs-need-a-manual-run-on-main)).
+  Run it once by hand on the default branch after each new Foundry release.
+- **Don't let runs pile up:** the `concurrency` group cancels superseded runs.
+- **Keep your license out of caches:** the last step deletes `license.json` (see
+  below).
+
+#### Why release runs need a manual run on main
+
+GitHub scopes every Actions cache entry to the branch or tag whose run saved
+it. A run can restore caches saved under its own ref, or under the default
+branch (and, for a pull request, its base branch), but not under any other
+branch or tag. A release runs under its tag: the `v1.2.0` run saves its caches
+under `refs/tags/v1.2.0`, and the `v1.3.0` run can't see them. It falls back to
+the default branch, and if the workflow never runs there, there is nothing to
+restore. Every release then downloads Foundry again, once per version in the
+matrix.
+
+The fix is the `workflow_dispatch` trigger: after a new Foundry release (when
+`latest` or `latest-<major>` resolves to a new version), run the workflow once
+by hand on the default branch (Actions → the workflow → Run workflow). That
+run downloads each build once and saves the caches under the default branch,
+where every later release run, and any manual run on another branch, restores
+them. A cache nobody restores for 7 days is deleted, and a repository's caches
+are capped at 10 GB in total (oldest evicted first), so run it again if a
+release log shows `Downloading Foundry VTT`.
 
 Add repository secrets `FOUNDRY_LICENSE_KEY`, `FOUNDRY_USERNAME` and
-`FOUNDRY_PASSWORD` (Settings → Secrets and variables → Actions). The workflow
-caches the Foundry build and the seeded data directory, so only the first run
-downloads Foundry and installs game systems:
+`FOUNDRY_PASSWORD` (Settings → Secrets and variables → Actions). This workflow
+follows the checklist:
 
 ```yaml
 name: Integration
 
+# Not on every push or pull request: each job needs a Foundry server.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
 
-# A newer push to the same branch cancels the run it supersedes.
+# A newer run for the same ref cancels the one it supersedes.
 concurrency:
   group: integration-${{ github.ref }}
   cancel-in-progress: true
@@ -394,11 +490,10 @@ The Foundry build is cached by version alone and the seeded worlds by version
 and config, so a new Foundry release is downloaded once, and a config change
 re-seeds without downloading Foundry again.
 
-foundryvtt.com rate limits downloads (HTTP 429) when several jobs fetch builds
-at once. The kit waits and retries (honouring `Retry-After`), and the caches
-and `concurrency` group above keep downloads rare. A seeded data directory
-restored from the cache on another runner is re-licensed automatically, since
-Foundry ties its license to the machine.
+If foundryvtt.com rate limits the downloads (HTTP 429), the kit waits and
+retries as described above. A seeded data directory restored from the cache on
+another runner is re-licensed automatically, since Foundry ties its license to
+the machine.
 
 Pull requests from forks can restore the default branch's caches and run their
 own version of the workflow. The last step therefore deletes the signed
@@ -407,21 +502,6 @@ jobs as a secret, which fork PRs never get. In a public repository, also require
 approval for workflows from all outside contributors (Settings → Actions →
 General → "Require approval for all external contributors"), so no one else's
 workflow can read the cached Foundry build.
-
-Secrets from pull requests opened from forks are not available to workflows,
-so forked PRs cannot run this job; gate it with
-`if: github.event.pull_request.head.repo.full_name == github.repository` if
-your repository takes outside contributions.
-
-To use an encrypted `.env` in CI instead of individual secrets, store only the
-dotenvx private key as a secret and run through dotenvx:
-
-```yaml
-- name: Integration tests
-  run: npx dotenvx run -- foundry-test test run --all-worlds
-  env:
-    DOTENV_PRIVATE_KEY: ${{ secrets.DOTENV_PRIVATE_KEY }}
-```
 
 ## Releasing
 
