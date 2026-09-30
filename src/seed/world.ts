@@ -12,7 +12,12 @@ export async function createWorld(page: Page, worldTitle: string, worldSystem: s
   log(`>>> Creating world "${worldTitle}" (${systemDisplayName(worldSystem)})...`);
   await page.getByRole("heading", { name: "Game Worlds" }).click();
   await page.waitForTimeout(1000);
-  if (await page.locator("article", { hasText: worldTitle }).isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (
+    await page
+      .locator("article", { hasText: worldTitle })
+      .isVisible({ timeout: 2000 })
+      .catch(() => false)
+  ) {
     log(">>> World already exists.");
     return;
   }
@@ -22,7 +27,10 @@ export async function createWorld(page: Page, worldTitle: string, worldSystem: s
   // associate them — anchor on the caption text instead.
   const titleField = page.getByText("World Title", { exact: true }).locator("xpath=..").getByRole("textbox");
   await titleField.fill(worldTitle, { timeout: 30_000 });
-  await page.getByRole("listitem").filter({ hasText: systemDisplayName(worldSystem) }).click({ timeout: 30_000 });
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: systemDisplayName(worldSystem) })
+    .click({ timeout: 30_000 });
   await page.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 30_000 });
   await pickBlankTemplate(page);
   await page.waitForTimeout(3000);
@@ -63,7 +71,9 @@ async function waitForCreation(page: Page): Promise<void> {
   const deadline = Date.now() + CREATION_TIMEOUT_MS;
   while (page.url().includes("/create") && !(await creationMovedOn(page))) {
     const notes = await page
-      .evaluate(() => [...document.querySelectorAll("#notifications li")].map((el) => (el.textContent ?? "").slice(0, 120)))
+      .evaluate(() =>
+        [...document.querySelectorAll("#notifications li")].map((el) => (el.textContent ?? "").slice(0, 120))
+      )
       .catch(() => [] as string[]);
     const migrating = notes.find((text) => /migrat/i.test(text));
     if (migrating) log(`[seed] ${migrating}`);

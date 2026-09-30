@@ -90,7 +90,9 @@ describe("FoundrySession", () => {
       password: "hunter2",
     });
     expect((login.init?.headers as Record<string, string>).Cookie).toBe("csrftoken=cookie-token");
-    expect(site.calls[2].url).toBe("https://foundryvtt.com/releases/download?build=367&platform=node&response_type=json");
+    expect(site.calls[2].url).toBe(
+      "https://foundryvtt.com/releases/download?build=367&platform=node&response_type=json"
+    );
     expect((site.calls[2].init?.headers as Record<string, string>).Cookie).toContain("sessionid=session-456");
   });
 
@@ -115,7 +117,9 @@ describe("downloadFoundryBuild", () => {
 
   it("leaves no partial file when the download fails", async () => {
     const destination = join(mkdtempSync(join(tmpdir(), "kit-download-")), "broken.zip");
-    await expect(downloadFile("https://nowhere.example.com/x.zip", destination, fakeSite().fetch)).rejects.toThrow(/404/);
+    await expect(downloadFile("https://nowhere.example.com/x.zip", destination, fakeSite().fetch)).rejects.toThrow(
+      /404/
+    );
     expect(existsSync(destination)).toBe(false);
     expect(existsSync(`${destination}.part`)).toBe(false);
   });

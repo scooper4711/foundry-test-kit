@@ -92,7 +92,9 @@ export class FoundrySession {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
     if (!this.cookies.get("sessionid")) {
-      throw new Error(`logIn: foundryvtt.com did not accept the login for ${credentials.username}; check the credentials`);
+      throw new Error(
+        `logIn: foundryvtt.com did not accept the login for ${credentials.username}; check the credentials`
+      );
     }
   }
 
@@ -102,7 +104,9 @@ export class FoundrySession {
       `/releases/download?build=${buildNumber(version)}&platform=node&response_type=json`
     );
     if (response.status !== 200) {
-      throw new Error(`releaseUrl: foundryvtt.com returned ${response.status} for build ${version}; is it licensed to this account?`);
+      throw new Error(
+        `releaseUrl: foundryvtt.com returned ${response.status} for build ${version}; is it licensed to this account?`
+      );
     }
     const body = (await response.json()) as { url?: string };
     if (!body.url) throw new Error(`releaseUrl: no download URL in the response for build ${version}`);

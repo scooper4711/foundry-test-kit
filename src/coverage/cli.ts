@@ -83,7 +83,8 @@ function loadSourceMap(bundle: string, projectRoot: string): SourceMapJson {
   if (map.sourcesContent?.every(Boolean)) return map;
   const bundleDirectory = resolve(bundle, "..");
   map.sourcesContent = map.sources.map(
-    (relativePath) => readIfExists(join(bundleDirectory, relativePath)) ?? readIfExists(join(projectRoot, relativePath)) ?? ""
+    (relativePath) =>
+      readIfExists(join(bundleDirectory, relativePath)) ?? readIfExists(join(projectRoot, relativePath)) ?? ""
   );
   return map;
 }

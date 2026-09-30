@@ -1,7 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { normalizeConfig } from "../src/config.js";
-import { renderDotEnvExports, renderShellEnv, runShellConfig, shellQuote, worldField } from "../src/cli/shell-config.js";
+import {
+  renderDotEnvExports,
+  renderShellEnv,
+  runShellConfig,
+  shellQuote,
+  worldField,
+} from "../src/cli/shell-config.js";
 import { tempProject } from "./support.js";
 
 const config = normalizeConfig(

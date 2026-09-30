@@ -179,7 +179,9 @@ interface FoundryCollection<T> {
 }
 
 interface CompendiumPack {
-  getIndex(): Promise<{ find(predicate: (item: { _id: string; name: string }) => boolean): { _id: string } | undefined }>;
+  getIndex(): Promise<{
+    find(predicate: (item: { _id: string; name: string }) => boolean): { _id: string } | undefined;
+  }>;
   getDocument(id: string): Promise<{ toObject(): Record<string, unknown> }>;
 }
 

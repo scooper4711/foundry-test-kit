@@ -12,7 +12,10 @@ export function tempProject(config: Record<string, unknown>, files: Record<strin
 }
 
 /** Runs `action` with env variables temporarily set (undefined deletes). */
-export async function withEnv<T>(changes: Record<string, string | undefined>, action: () => T | Promise<T>): Promise<T> {
+export async function withEnv<T>(
+  changes: Record<string, string | undefined>,
+  action: () => T | Promise<T>
+): Promise<T> {
   const saved = Object.fromEntries(Object.keys(changes).map((name) => [name, process.env[name]]));
   const apply = (values: Record<string, string | undefined>) => {
     for (const [name, value] of Object.entries(values)) {

@@ -63,15 +63,15 @@ Add `foundry-test.config.json` at your project root:
 }
 ```
 
-| Field | Meaning | Default |
-|---|---|---|
-| `moduleId` | Your module's id (its folder under `Data/modules`) | required |
-| `foundryVersion` | Foundry build to run | `14.367` |
-| `testWorlds` | Worlds the suite runs against; one Playwright project per `system` | one `integration-test` pf2e world |
-| `devWorld` | World `foundry-test dev start` boots into | `dev-test` |
-| `systems` | Game systems installed when seeding a data directory | every system named by a world |
-| `seed.settings` | Module settings written into freshly seeded worlds (`value`, or `fromEnv` — skipped when unset) | none |
-| `coverage.bundle` | Your built bundle, relative to the project root (must have a sourcemap) | `dist/main.js` |
+| Field             | Meaning                                                                                         | Default                           |
+| ----------------- | ----------------------------------------------------------------------------------------------- | --------------------------------- |
+| `moduleId`        | Your module's id (its folder under `Data/modules`)                                              | required                          |
+| `foundryVersion`  | Foundry build to run                                                                            | `14.367`                          |
+| `testWorlds`      | Worlds the suite runs against; one Playwright project per `system`                              | one `integration-test` pf2e world |
+| `devWorld`        | World `foundry-test dev start` boots into                                                       | `dev-test`                        |
+| `systems`         | Game systems installed when seeding a data directory                                            | every system named by a world     |
+| `seed.settings`   | Module settings written into freshly seeded worlds (`value`, or `fromEnv` — skipped when unset) | none                              |
+| `coverage.bundle` | Your built bundle, relative to the project root (must have a sourcemap)                         | `dist/main.js`                    |
 
 Your project root is symlinked into each data directory as the module, so the
 built bundle and `module.json` are served straight from your working tree.
@@ -117,12 +117,12 @@ tmp/
 
 `foundry-test` and `defineFoundryConfig` read `.env` at the project root.
 
-| Variable | Needed for |
-|---|---|
-| `FOUNDRY_LICENSE_KEY` | Seeding a new data directory |
+| Variable                               | Needed for                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| `FOUNDRY_LICENSE_KEY`                  | Seeding a new data directory                                                   |
 | `FOUNDRY_USERNAME`, `FOUNDRY_PASSWORD` | Downloading a Foundry build from foundryvtt.com (not needed once it is cached) |
-| `FOUNDRY_ADMIN_PASSWORD` | Optional; the servers' admin password (default `test-admin`) |
-| `FOUNDRY_PORT`, `FOUNDRY_TEST_PORT` | Optional; dev and test ports (defaults 30000 and 30001) |
+| `FOUNDRY_ADMIN_PASSWORD`               | Optional; the servers' admin password (default `test-admin`)                   |
+| `FOUNDRY_PORT`, `FOUNDRY_TEST_PORT`    | Optional; dev and test ports (defaults 30000 and 30001)                        |
 
 `.env` never overrides a variable that is already set in the environment.
 
@@ -300,10 +300,10 @@ To use an encrypted `.env` in CI instead of individual secrets, store only the
 dotenvx private key as a secret and run through dotenvx:
 
 ```yaml
-      - name: Integration tests
-        run: npx dotenvx run -- foundry-test test run --all-worlds
-        env:
-          DOTENV_PRIVATE_KEY: ${{ secrets.DOTENV_PRIVATE_KEY }}
+- name: Integration tests
+  run: npx dotenvx run -- foundry-test test run --all-worlds
+  env:
+    DOTENV_PRIVATE_KEY: ${{ secrets.DOTENV_PRIVATE_KEY }}
 ```
 
 ## License

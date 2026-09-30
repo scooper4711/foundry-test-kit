@@ -89,7 +89,7 @@ export function normalizeConfig(raw: RawConfig, projectRoot: string): TestKitCon
 }
 
 function toWorld(world: Partial<WorldConfig>): WorldConfig {
-  if (!world.id) throw new Error("normalizeConfig: every world needs an \"id\"");
+  if (!world.id) throw new Error('normalizeConfig: every world needs an "id"');
   return { id: world.id, system: world.system ?? "pf2e", title: world.title ?? world.id };
 }
 

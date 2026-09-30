@@ -82,7 +82,13 @@ function waitForInstallFinished(page: Page, article: Locator): Promise<string> {
 async function clickThroughTours(page: Page, button: Locator, systemName: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     await dismissTours(page);
-    if (await button.click({ timeout: 30_000 }).then(() => true, () => false)) return;
+    if (
+      await button.click({ timeout: 30_000 }).then(
+        () => true,
+        () => false
+      )
+    )
+      return;
   }
   throw new Error(`clickThroughTours: could not click the ${systemName} Install button (covered or detached)`);
 }

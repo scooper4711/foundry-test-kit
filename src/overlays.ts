@@ -7,14 +7,14 @@ import type { Page } from "@playwright/test";
 
 /** Button labels that unambiguously dismiss (never accept) a popup. */
 const DISMISS_BUTTON_NAMES = [
-  'Close Window',
-  'Close',
-  'Dismiss',
-  'Decline',
-  'Decline Sharing',
-  'No',
-  'End Tour',
-  'Got it',
+  "Close Window",
+  "Close",
+  "Dismiss",
+  "Decline",
+  "Decline Sharing",
+  "No",
+  "End Tour",
+  "Got it",
   "Don't Show Again",
 ];
 
@@ -28,12 +28,12 @@ export async function dismissTours(page: Page): Promise<void> {
   // Any of these visible means a tour is up (tooltip, centered step, or dim
   // overlay). Wait for one to appear; if none does, there is nothing to do.
   // After dismissing, wait for the next — tours can chain.
-  const TOUR_SELECTORS = ['.tour', '.tour-center-step', '.tour-overlay', '#tooltip.tour'];
+  const TOUR_SELECTORS = [".tour", ".tour-center-step", ".tour-overlay", "#tooltip.tour"];
   for (let round = 0; round < OVERLAY_MAX_ROUNDS; round++) {
     const appeared = await page
-      .locator(TOUR_SELECTORS.join(', '))
+      .locator(TOUR_SELECTORS.join(", "))
       .first()
-      .waitFor({ state: 'visible', timeout: OVERLAY_WAIT_MS })
+      .waitFor({ state: "visible", timeout: OVERLAY_WAIT_MS })
       .then(() => true)
       .catch(() => false);
     if (!appeared) return;
@@ -42,13 +42,13 @@ export async function dismissTours(page: Page): Promise<void> {
         const Ns = (globalThis as unknown as { foundry?: { nue?: { Tour?: unknown } } }).foundry?.nue?.Tour as
           { tourInProgress: boolean; activeTour?: { exit: () => void } | null } | undefined;
         if (Ns?.tourInProgress) Ns.activeTour?.exit();
-        document.querySelectorAll('.tour-overlay, .tour-center-step').forEach((el) => el.remove());
+        document.querySelectorAll(".tour-overlay, .tour-center-step").forEach((el) => el.remove());
       })
       .catch(() => {});
     const tourExit = page.locator('.tour [data-action="exit"], .tour-center-step [data-action="exit"]').first();
     if (await tourExit.isVisible({ timeout: 1000 }).catch(() => false)) {
       await tourExit.click().catch(() => {});
-      await page.waitForFunction(() => !document.querySelector('.tour'), { timeout: 2000 }).catch(() => {});
+      await page.waitForFunction(() => !document.querySelector(".tour"), { timeout: 2000 }).catch(() => {});
     }
   }
 }
@@ -70,10 +70,10 @@ export async function dismissOverlays(page: Page): Promise<void> {
     const found: string | null = await page
       .waitForFunction(
         (names: string[]) => {
-          if (document.querySelector('#notifications li')) return 'notifications';
-          const buttons = Array.from(document.querySelectorAll('button'));
+          if (document.querySelector("#notifications li")) return "notifications";
+          const buttons = Array.from(document.querySelectorAll("button"));
           for (const button of buttons) {
-            const label = (button.textContent ?? '').trim();
+            const label = (button.textContent ?? "").trim();
             if (!names.includes(label)) continue;
             const rect = button.getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0) return label;
@@ -86,15 +86,15 @@ export async function dismissOverlays(page: Page): Promise<void> {
       .then((handle) => handle.jsonValue())
       .catch(() => null);
     if (found === null) return;
-    if (found === 'notifications') {
+    if (found === "notifications") {
       await page
         .evaluate(() => {
-          document.querySelectorAll('#notifications li').forEach((el) => el.remove());
+          document.querySelectorAll("#notifications li").forEach((el) => el.remove());
         })
         .catch(() => {});
       continue;
     }
-    const button = page.getByRole('button', { name: found, exact: true });
+    const button = page.getByRole("button", { name: found, exact: true });
     if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
       await button.click().catch(() => {});
     }
@@ -111,7 +111,7 @@ export async function dismissOverlays(page: Page): Promise<void> {
 export async function ensureAdminAccess(page: Page, password: string): Promise<void> {
   const deadline = Date.now() + 120_000;
   for (;;) {
-    const field = page.getByRole('textbox', { name: 'Administrator Password' });
+    const field = page.getByRole("textbox", { name: "Administrator Password" });
     const visible = await field.isVisible({ timeout: 2000 }).catch(() => false);
     if (!visible) {
       // Re-check once after a beat: the dialog can pop late.
@@ -122,14 +122,13 @@ export async function ensureAdminAccess(page: Page, password: string): Promise<v
       return;
     }
     await field.fill(password);
-    const login = page.getByRole('button', { name: 'Log In' });
+    const login = page.getByRole("button", { name: "Log In" });
     if (await login.isVisible({ timeout: 2000 }).catch(() => false)) {
       await login.click().catch(() => {});
     }
-    await field.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+    await field.waitFor({ state: "hidden", timeout: 15_000 }).catch(() => {});
     if (Date.now() > deadline) {
-      throw new Error('administrator access prompt never cleared');
+      throw new Error("administrator access prompt never cleared");
     }
   }
 }
-
