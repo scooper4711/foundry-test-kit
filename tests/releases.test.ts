@@ -66,6 +66,12 @@ describe("resolveVersion", () => {
     expect(await resolveVersion("latest-14", fetchPage)).toBe("14.368");
   });
 
+  it("refuses versions before 12 and malformed versions", async () => {
+    await expect(resolveVersion("11.315")).rejects.toThrow(/not supported \(12.x or later\)/);
+    await expect(resolveVersion("latest-11")).rejects.toThrow(/not supported/);
+    await expect(resolveVersion("fourteen")).rejects.toThrow(/not a Foundry version/);
+  });
+
   it("passes concrete versions through without fetching", async () => {
     const noFetch = (async () => {
       throw new Error("should not fetch");
