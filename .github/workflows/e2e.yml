@@ -2,26 +2,26 @@ name: E2E
 
 # Seeds a Simple Worldbuilding world with the fixture module and runs its
 # specs on the newest release of every supported Foundry major.
+#
+# Runs only when a release is published, and by hand. Every job without a
+# cached Foundry build downloads one from foundryvtt.com, so this does not
+# run on pushes or pull requests. A release runs under its tag and can only
+# restore caches saved under that tag or on main: after a new Foundry
+# release, run this workflow once by hand on main to download the build and
+# fill the caches that later release runs restore. A manual run on another
+# branch also restores main's caches.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["**/*.md"]
-  pull_request:
-    branches: [main]
-    paths-ignore: ["**/*.md"]
+  release:
+    types: [published]
   workflow_dispatch:
 
-# Each run downloads Foundry from foundryvtt.com on a cache miss, and several
-# at once get rate limited (429): a newer push to the same branch cancels
-# the run it supersedes.
+# A newer run for the same ref cancels the one it supersedes.
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   e2e:
-    # Secrets are not available to pull requests from forks.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
