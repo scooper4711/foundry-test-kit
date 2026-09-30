@@ -4,10 +4,12 @@
  *   shell-config.js env                 → KIT_* shell assignments to eval
  *   shell-config.js dotenv              → exports for .env entries not already set
  *   shell-config.js world <id> <field>  → a world's "system" or "title"
+ *   shell-config.js seed-hash <id>      → fingerprint of what seeding a world applies
  *
  * The world lookup falls back to the dev world, then to the id itself, so
  * ad-hoc worlds (`--world other`) still work.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "dotenv";
@@ -58,6 +60,21 @@ export function worldField(config: TestKitConfig, worldId: string, field: "syste
   return field === "system" ? (config.testWorlds[0]?.system ?? "pf2e") : worldId;
 }
 
+/**
+ * Fingerprints everything seeding a world applies (its system and title,
+ * the installed systems, the module, settings and users), so the CLI can
+ * re-seed when the config changes instead of trusting an old seed.
+ */
+export function seedHash(config: TestKitConfig, worldId: string): string {
+  const seeded = {
+    world: { id: worldId, system: worldField(config, worldId, "system"), title: worldField(config, worldId, "title") },
+    systems: config.systems,
+    moduleId: config.moduleId,
+    seed: config.seed,
+  };
+  return createHash("sha256").update(JSON.stringify(seeded)).digest("hex").slice(0, 16);
+}
+
 /** Runs a shell-config command, returning its output. */
 export function runShellConfig(argv: string[], config: TestKitConfig, env: NodeJS.ProcessEnv): string {
   const [command, worldId, field] = argv;
@@ -69,7 +86,10 @@ export function runShellConfig(argv: string[], config: TestKitConfig, env: NodeJ
   if (command === "world" && worldId && (field === "system" || field === "title")) {
     return worldField(config, worldId, field);
   }
-  throw new Error(`shell-config: usage: env | dotenv | world <id> system|title (got: ${argv.join(" ")})`);
+  if (command === "seed-hash" && worldId) return seedHash(config, worldId);
+  throw new Error(
+    `shell-config: usage: env | dotenv | world <id> system|title | seed-hash <id> (got: ${argv.join(" ")})`
+  );
 }
 
 if (isMainModule(import.meta.url)) {

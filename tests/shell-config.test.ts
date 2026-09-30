@@ -5,6 +5,7 @@ import {
   renderDotEnvExports,
   renderShellEnv,
   runShellConfig,
+  seedHash,
   shellQuote,
   worldField,
 } from "../src/cli/shell-config.js";
@@ -86,7 +87,27 @@ describe("runShellConfig", () => {
     expect(runShellConfig(["dotenv"], normalizeConfig({ moduleId: "m" }, tempProject({ moduleId: "m" })), {})).toBe("");
   });
 
+  it("prints the seed fingerprint of a world", () => {
+    expect(runShellConfig(["seed-hash", "sfs-test"], config, {})).toBe(seedHash(config, "sfs-test"));
+  });
+
   it("rejects unknown commands", () => {
     expect(() => runShellConfig(["world", "x", "color"], config, {})).toThrow(/usage/);
+  });
+});
+
+describe("seedHash", () => {
+  it("is stable for the same config and differs between worlds", () => {
+    expect(seedHash(config, "integration-test")).toMatch(/^[0-9a-f]{16}$/);
+    expect(seedHash(config, "integration-test")).toBe(seedHash(config, "integration-test"));
+    expect(seedHash(config, "integration-test")).not.toBe(seedHash(config, "sfs-test"));
+  });
+
+  it("changes when the seeded users change", () => {
+    const withTrusted = normalizeConfig(
+      { moduleId: "my-module", testWorlds: config.testWorlds, seed: { users: [{ name: "Tess", role: "trusted" }] } },
+      "/projects/my module"
+    );
+    expect(seedHash(withTrusted, "integration-test")).not.toBe(seedHash(config, "integration-test"));
   });
 });
