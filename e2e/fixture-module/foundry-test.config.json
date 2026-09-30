@@ -1,0 +1,7 @@
+{
+  "moduleId": "foundry-test-kit-fixture",
+  "foundryVersion": "latest",
+  "testWorlds": [{ "id": "kit-e2e", "system": "worldbuilding", "title": "Kit E2E" }],
+  "devWorld": { "id": "kit-e2e-dev", "system": "worldbuilding", "title": "Kit E2E Dev" },
+  "coverage": { "bundle": "dist/main.js" }
+}

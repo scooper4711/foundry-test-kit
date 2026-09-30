@@ -160,9 +160,16 @@ VERSION="${VERSION:-${FOUNDRY_VERSION:-$DEFAULT_VERSION}}"
 # "latest" names the newest stable release and "latest-<major>" the newest
 # of that major (e.g. latest-13); directories always use the concrete
 # version. Offline, fall back to the newest matching version unpacked here.
+if ! [[ "$VERSION" =~ ^latest(-([0-9]+))?$ ]]; then
+  kit_node download/cli.js --resolve "$VERSION" >/dev/null || exit 1
+fi
 if [[ "$VERSION" =~ ^latest(-([0-9]+))?$ ]]; then
   SYMBOLIC="$VERSION"
   MAJOR_PREFIX="${BASH_REMATCH[2]:+${BASH_REMATCH[2]}.}"
+  if [ -n "${BASH_REMATCH[2]}" ] && [ "${BASH_REMATCH[2]}" -lt 12 ]; then
+    echo "ERROR: $SYMBOLIC is not supported (Foundry 12 or later)." >&2
+    exit 1
+  fi
   if RESOLVED="$(kit_node download/cli.js --resolve "$SYMBOLIC" 2>/dev/null)"; then
     VERSION="$RESOLVED"
     echo "$SYMBOLIC = Foundry $VERSION"
@@ -278,15 +285,28 @@ ensure_server_zip() {
   kit_node download/cli.js --version "$VERSION" --out "$ZIP_PATH"
 }
 
+# The server entry point: main.mjs at the top of a Node build (13+), or in
+# resources/app/ of Foundry 12's combined Linux/Node.js build.
+server_entry() {
+  local candidate
+  for candidate in "$SERVER_DIR/main.mjs" "$SERVER_DIR/resources/app/main.mjs"; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 ensure_server_unpacked() {
-  if [ -f "$SERVER_DIR/main.mjs" ]; then return 0; fi
+  if server_entry >/dev/null; then return 0; fi
   ensure_server_zip
   command -v unzip >/dev/null || { echo "ERROR: unzip is required" >&2; exit 1; }
   echo "Unpacking $ZIP_PATH ..."
   mkdir -p "$SERVER_DIR"
   unzip -q -o "$ZIP_PATH" -d "$SERVER_DIR"
-  if [ ! -f "$SERVER_DIR/main.mjs" ]; then
-    echo "ERROR: unpacked server has no main.mjs ($SERVER_DIR). Is $ZIP_PATH a Node build?" >&2
+  if ! server_entry >/dev/null; then
+    echo "ERROR: unpacked server has no main.mjs ($SERVER_DIR). Is $ZIP_PATH a Node.js build?" >&2
     exit 1
   fi
 }
@@ -306,6 +326,21 @@ ensure_data_dir() {
   ln -s "$PROJECT_ROOT" "$link"
 }
 
+# Records the port and world in the data directory's Config/options.json.
+# Foundry 12 takes these from options.json rather than --port/--world; 13+
+# honours both, so writing them keeps every version consistent.
+write_server_options() {
+  mkdir -p "$DATA_DIR/Config"
+  OPTIONS_FILE="$DATA_DIR/Config/options.json" FOUNDRY_OPTION_PORT="$PORT" FOUNDRY_OPTION_WORLD="$WORLD_ID" node -e '
+    const fs = require("fs");
+    const file = process.env.OPTIONS_FILE;
+    const options = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+    options.port = Number(process.env.FOUNDRY_OPTION_PORT);
+    options.world = process.env.FOUNDRY_OPTION_WORLD || null;
+    fs.writeFileSync(file, JSON.stringify(options, null, 2));
+  '
+}
+
 do_start() {
   local existing
   existing="$(read_pidfile)"
@@ -316,12 +351,12 @@ do_start() {
   if [ -n "$existing" ]; then rm -f "$PID_FILE"; fi
 
   # --clean wipes just this world plus the server logs, so the next boot
-  # re-seeds from scratch (license → PF2e → world) with fresh logs. Runs
+  # re-seeds from scratch (license → systems → world) with fresh logs. Runs
   # only when no server is up (checked above), and never touches anything
   # outside the world dir and Logs.
   if [ "$CLEAN" -eq 1 ] && [ -n "$WORLD_DIR_NAME" ]; then
     echo "Cleaning world $WORLD_DIR_NAME and server logs ..."
-    rm -rf "$DATA_DIR/Data/worlds/$WORLD_DIR_NAME" "$DATA_DIR/Logs"
+    rm -rf "$DATA_DIR/Data/worlds/$WORLD_DIR_NAME" "$(seed_marker)" "$DATA_DIR/Logs"
     mkdir -p "$DATA_DIR/Logs"
   fi
 
@@ -348,10 +383,11 @@ do_start() {
   if [ -n "$WORLD_ID" ]; then
     world_flag="--world=$WORLD_ID"
   fi
+  write_server_options
   echo "Starting Foundry $VERSION ($MODE) on port $PORT${WORLD_ID:+ world $WORLD_ID}..."
   # Intentional word splitting of the optional flag (empty expands to nothing).
   # shellcheck disable=SC2086
-  node "$SERVER_DIR/main.mjs" \
+  node "$(server_entry)" \
     --dataPath="$DATA_DIR" \
     --port="$PORT" \
     --adminPassword="${FOUNDRY_ADMIN_PASSWORD:-test-admin}" \
@@ -380,10 +416,16 @@ do_start() {
   exit 1
 }
 
+# Seeding writes this marker only once it completes, so a run interrupted
+# after the world folder was created is seeded again (seeding is idempotent).
+seed_marker() {
+  echo "$DATA_DIR/.seeded-$WORLD_DIR_NAME"
+}
+
 seed_if_needed() {
   if [ -z "$WORLD_ID" ]; then return 0; fi
-  if [ -d "$DATA_DIR/Data/worlds/$WORLD_DIR_NAME" ]; then
-    echo "World $WORLD_DIR_NAME already exists — skipping seed."
+  if [ -f "$(seed_marker)" ]; then
+    echo "World $WORLD_DIR_NAME already seeded — skipping seed."
     return 0
   fi
   if [ -z "${FOUNDRY_LICENSE_KEY:-}" ]; then
@@ -396,7 +438,9 @@ seed_if_needed() {
   FOUNDRY_SYSTEM_IDS="${FOUNDRY_SYSTEM_IDS:-$KIT_SYSTEMS}" \
   FOUNDRY_WORLD_SYSTEM="${FOUNDRY_WORLD_SYSTEM:-$(kit_node cli/shell-config.js world "$WORLD_ID" system)}" \
   SEED_WORLD_TITLE="$WORLD_TITLE" \
-    kit_node seed/cli.js
+  FOUNDRY_VERSION="$VERSION" \
+    kit_node seed/cli.js || { echo "ERROR: seeding $WORLD_DIR_NAME failed." >&2; exit 1; }
+  touch "$(seed_marker)"
 }
 
 # World the running server was started with (4th line of the pid file).

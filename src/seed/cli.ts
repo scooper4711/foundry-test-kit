@@ -6,8 +6,10 @@
  *
  * Environment: FOUNDRY_PORT, FOUNDRY_LICENSE_KEY, FOUNDRY_ADMIN_PASSWORD,
  * FOUNDRY_SYSTEM_IDS (comma separated), FOUNDRY_WORLD_SYSTEM,
- * SEED_WORLD_TITLE, PLAYWRIGHT_HEADED.
+ * SEED_WORLD_TITLE, FOUNDRY_VERSION (names failure evidence), PLAYWRIGHT_HEADED.
  */
+import { mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { chromium, type Page } from "@playwright/test";
 import { loadTestKitConfig } from "../config.js";
 import { FOUNDRY_VIEWPORT } from "../context.js";
@@ -60,6 +62,28 @@ export function seedOptionsFromEnv(env: NodeJS.ProcessEnv): SeedOptions {
   };
 }
 
+/**
+ * Saves a screenshot and the markup of any open dialogs (or the whole body,
+ * on a page without one) to the work dir's logs/, so a seeding failure on
+ * an unfamiliar Foundry version shows what was on screen. Named by version
+ * so runs against several versions at once keep their own evidence.
+ */
+async function saveFailureEvidence(page: Page, attempt: number): Promise<void> {
+  const directory = resolve(loadTestKitConfig().workDir, "logs");
+  mkdirSync(directory, { recursive: true });
+  const version = process.env.FOUNDRY_VERSION ?? "unknown";
+  const base = resolve(directory, `seed-failure-${version}-${attempt}`);
+  await page.screenshot({ path: `${base}.png`, fullPage: true }).catch(() => {});
+  const markup = await page
+    .evaluate(() => {
+      const dialogs = [...document.querySelectorAll("[role=dialog], dialog, .window-app")];
+      return dialogs.length > 0 ? dialogs.map((el) => el.outerHTML).join("\n\n") : document.body.outerHTML;
+    })
+    .catch(() => "<unreadable>");
+  writeFileSync(`${base}.html`, `<!-- ${page.url()} -->\n${markup}`);
+  log(`[seed] saved ${base}.png and .html`);
+}
+
 async function main(): Promise<void> {
   const options = seedOptionsFromEnv(process.env);
   const browser = await chromium.launch({ headless: process.env.PLAYWRIGHT_HEADED !== "true" });
@@ -70,6 +94,7 @@ async function main(): Promise<void> {
         await seedFoundry(page, options);
         return;
       } catch (failure) {
+        await saveFailureEvidence(page, attempt);
         if (attempt >= MAX_ATTEMPTS) throw failure;
         log(`[seed] attempt ${attempt} failed (${String(failure)}); retrying...`);
       } finally {

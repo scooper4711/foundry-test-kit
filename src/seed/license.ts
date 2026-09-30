@@ -3,7 +3,8 @@
  * key, EULA, and administrator login, in whatever order Foundry asks.
  */
 import type { Page } from "@playwright/test";
-import { adminPasswordField, dismissOverlays, ensureAdminAccess } from "../overlays.js";
+import { adminPasswordField } from "../foundry-ui.js";
+import { dismissOverlays, ensureAdminAccess } from "../overlays.js";
 import { log, type SeedOptions } from "./options.js";
 
 const MAX_ATTEMPTS = 5;

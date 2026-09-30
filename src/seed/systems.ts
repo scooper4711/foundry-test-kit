@@ -3,7 +3,15 @@
  * screen's package installer (skipping ones already installed).
  */
 import type { Locator, Page } from "@playwright/test";
-import { dismissTours } from "../overlays.js";
+import {
+  installedPackage,
+  installerFilter,
+  installerHeaderClose,
+  installerPackage,
+  installerWindow,
+  setupTab,
+} from "../foundry-ui.js";
+import { clickPastPopups, dismissTours } from "../overlays.js";
 import { log, systemDisplayName } from "./options.js";
 
 const INSTALL_TIMEOUT_MS = 300_000;
@@ -12,10 +20,9 @@ export async function installSystems(page: Page, systemIds: string[]): Promise<v
   for (const systemId of systemIds) {
     const systemName = systemDisplayName(systemId);
     log(`-> Checking for ${systemName} system...`);
-    await page.getByRole("heading", { name: "Game Systems" }).click();
+    await setupTab(page, "Game Systems").click();
     await page.waitForTimeout(1000);
-    const installed = await page
-      .locator("article", { hasText: systemName })
+    const installed = await installedPackage(page, systemId)
       .isVisible({ timeout: 2000 })
       .catch(() => false);
     if (installed) {
@@ -29,15 +36,16 @@ export async function installSystems(page: Page, systemIds: string[]): Promise<v
 
 async function installSystem(page: Page, systemId: string, systemName: string): Promise<void> {
   log(`>>> Downloading ${systemName} system (this may take a few minutes)...`);
-  // Tours only here: a broad dismiss could click the installer's own Close.
-  await dismissTours(page);
-  await page.getByRole("button", { name: "Install System" }).click({ timeout: 30_000 });
+  // A late popup can cover the button. Clearing popups is safe only until the
+  // installer opens: after that it could click the installer's own Close, so
+  // from then on only tours are dismissed.
+  await clickPastPopups(page, page.getByRole("button", { name: "Install System" }));
   await page.waitForTimeout(2000);
   await dismissTours(page);
-  await page.getByRole("searchbox", { name: "Filter" }).fill(systemId);
+  await installerFilter(page).fill(systemId);
 
   // The remote list resolves asynchronously — wait for the article itself.
-  const article = page.locator(`[data-package-id='${systemId}']`);
+  const article = installerPackage(page, systemId);
   await article.waitFor({ state: "visible", timeout: 60_000 });
   const installButton = article.getByRole("button", { name: "Install" });
   if (!(await installButton.isVisible({ timeout: 5000 }).catch(() => false))) {
@@ -94,22 +102,12 @@ async function clickThroughTours(page: Page, button: Locator, systemName: string
 }
 
 /**
- * Closes the install dialog (form#install-package, whose header close is a
- * real button) and verifies it went away, since a stale dialog blocks
+ * Closes the install dialog and verifies it went away, since a stale dialog blocks
  * everything after it. Dumps the dialog markup when it will not close.
  */
 async function closeInstaller(page: Page): Promise<void> {
-  const installer = page.locator(
-    "form#install-package, .window-app:has([data-package-id]), dialog:has([data-package-id])"
-  );
-  const headerClose = page
-    .locator(
-      'form#install-package header button[data-action="close"], ' +
-        ".window-app .window-header a.header-button:has(i.fa-xmark), " +
-        ".window-app .window-header a.header-button:has(i.fa-times), " +
-        ".window-app .header-control.fa-xmark, dialog .header-control"
-    )
-    .first();
+  const installer = installerWindow(page);
+  const headerClose = installerHeaderClose(page);
   const labeledClose = installer.getByRole("button", { name: /^(Done|Close|OK|Finished)$/ }).first();
   for (let attempt = 0; attempt < 3; attempt++) {
     if (!(await installer.isVisible({ timeout: 2000 }).catch(() => false))) return;

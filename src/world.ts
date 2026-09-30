@@ -40,7 +40,7 @@ export async function importPregen(page: Page, request: PregenRequest): Promise<
     if (!entry) throw new Error(`importPregen: ${entryName} not found in ${packId}`);
     const data = (await pack.getDocument(entry._id)).toObject();
     data.name = name;
-    const created = await g.Actor.create(data);
+    const created = await g.CONFIG.Actor.documentClass.create(data);
     if (society) {
       await created.update({
         "system.pfs.playerNumber": society.playerNumber,
@@ -58,7 +58,11 @@ export async function createParty(page: Page, name: string, memberIds: string[])
     async ({ partyName, ids }) => {
       const g = globalThis as unknown as PageGlobals;
       const members = ids.map((id) => ({ uuid: g.game.actors.get(id)?.uuid ?? `Actor.${id}` }));
-      const party = await g.Actor.create({ name: partyName, type: "party", system: { details: { members } } });
+      const party = await g.CONFIG.Actor.documentClass.create({
+        name: partyName,
+        type: "party",
+        system: { details: { members } },
+      });
       return party.id;
     },
     { partyName: name, ids: memberIds }
@@ -72,7 +76,7 @@ export async function deleteActorsByPrefix(page: Page, prefixes: string[]): Prom
     const ids = g.game.actors
       .filter((actor) => namePrefixes.some((prefix) => actor.name.startsWith(prefix)))
       .map((actor) => actor.id);
-    if (ids.length > 0) await g.Actor.deleteDocuments(ids);
+    if (ids.length > 0) await g.CONFIG.Actor.documentClass.deleteDocuments(ids);
   }, prefixes);
 }
 
@@ -81,7 +85,7 @@ export async function deleteChatMessages(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const g = globalThis as unknown as PageGlobals;
     const ids = g.game.messages.map((message) => message.id);
-    if (ids.length > 0) await g.ChatMessage.deleteDocuments(ids);
+    if (ids.length > 0) await g.CONFIG.ChatMessage.documentClass.deleteDocuments(ids);
   });
 }
 
@@ -165,11 +169,19 @@ interface PageGlobals {
     messages: { map<T>(transform: (message: { id: string }) => T): T[] };
     settings: { set(scope: string, key: string, value: unknown): Promise<unknown> };
   };
-  Actor: {
-    create(data: Record<string, unknown>): Promise<GameActor>;
-    deleteDocuments(ids: string[]): Promise<unknown>;
+  /**
+   * Document classes via CONFIG, not the Actor/ChatMessage globals: Foundry
+   * 12 declares those in classic scripts, so they are not on globalThis.
+   */
+  CONFIG: {
+    Actor: {
+      documentClass: {
+        create(data: Record<string, unknown>): Promise<GameActor>;
+        deleteDocuments(ids: string[]): Promise<unknown>;
+      };
+    };
+    ChatMessage: { documentClass: { deleteDocuments(ids: string[]): Promise<unknown> } };
   };
-  ChatMessage: { deleteDocuments(ids: string[]): Promise<unknown> };
   foundry: { applications: { instances: Map<string, { close(): Promise<unknown> }> } };
 }
 

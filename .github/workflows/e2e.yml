@@ -1,0 +1,70 @@
+name: E2E
+
+# Seeds a Simple Worldbuilding world with the fixture module and runs its
+# specs on the newest release of every supported Foundry major.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    # Secrets are not available to pull requests from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        foundry: [latest-12, latest-13, latest]
+    defaults:
+      run:
+        working-directory: e2e/fixture-module
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+
+      - name: Install and build the kit
+        working-directory: .
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+
+      - name: Resolve Foundry version
+        id: foundry
+        run: echo "version=$(../../bin/foundry-test resolve ${{ matrix.foundry }})" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Foundry build and seeded world
+        uses: actions/cache@v6
+        with:
+          path: |
+            e2e/fixture-module/.foundry-test/cache/FoundryVTT-Node-${{ steps.foundry.outputs.version }}.zip
+            e2e/fixture-module/.foundry-test/versions/${{ steps.foundry.outputs.version }}
+            e2e/fixture-module/.foundry-test/Data-test-${{ steps.foundry.outputs.version }}
+          key: e2e-foundry-${{ steps.foundry.outputs.version }}-${{ hashFiles('e2e/fixture-module/foundry-test.config.json') }}
+
+      - name: Seed and test
+        # The spec checks that the running server is the resolved major.
+        run: |
+          VERSION="${{ steps.foundry.outputs.version }}"
+          EXPECTED_FOUNDRY_MAJOR="${VERSION%%.*}" ../../bin/foundry-test test run --version "$VERSION"
+        env:
+          FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
+          FOUNDRY_USERNAME: ${{ secrets.FOUNDRY_USERNAME }}
+          FOUNDRY_PASSWORD: ${{ secrets.FOUNDRY_PASSWORD }}
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ steps.foundry.outputs.version }}
+          path: |
+            e2e/fixture-module/.foundry-test/logs/
+            e2e/fixture-module/test-results/
+          retention-days: 7

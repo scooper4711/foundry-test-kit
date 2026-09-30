@@ -43,10 +43,12 @@ async function ensurePlayer(page: Page, playerName: string): Promise<string> {
   return page.evaluate(async (name) => {
     const g = globalThis as unknown as {
       game: { users: { find(predicate: (user: { name: string }) => boolean): unknown } };
-      User: { create(data: Record<string, unknown>): Promise<unknown> };
+      CONFIG: { User: { documentClass: { create(data: Record<string, unknown>): Promise<unknown> } } };
     };
     if (g.game.users.find((user) => user.name === name)) return "exists";
-    await g.User.create({ name, role: 1, password: "" });
+    // Not the global User: Foundry 12 declares it in a classic script, so it
+    // is not a property of globalThis.
+    await g.CONFIG.User.documentClass.create({ name, role: 1, password: "" });
     return "created";
   }, playerName);
 }
