@@ -383,6 +383,11 @@ jobs:
         with:
           name: playwright-results-${{ steps.foundry.outputs.version }}
           path: test-results/
+
+      # Caches are saved after the last step: keep the license out of them.
+      - name: Remove license before caching
+        if: always()
+        run: rm -f .foundry-test/Data-test-*/Config/license.json
 ```
 
 The Foundry build is cached by version alone and the seeded worlds by version
@@ -394,6 +399,14 @@ at once. The kit waits and retries (honouring `Retry-After`), and the caches
 and `concurrency` group above keep downloads rare. A seeded data directory
 restored from the cache on another runner is re-licensed automatically, since
 Foundry ties its license to the machine.
+
+Pull requests from forks can restore the default branch's caches and run their
+own version of the workflow. The last step therefore deletes the signed
+`license.json` before the caches are saved; the license key itself only reaches
+jobs as a secret, which fork PRs never get. In a public repository, also require
+approval for workflows from all outside contributors (Settings → Actions →
+General → "Require approval for all external contributors"), so no one else's
+workflow can read the cached Foundry build.
 
 Secrets from pull requests opened from forks are not available to workflows,
 so forked PRs cannot run this job; gate it with

@@ -58,9 +58,6 @@ jobs:
             e2e/fixture-module/.foundry-test/cache/FoundryVTT-Node-${{ steps.foundry.outputs.version }}.zip
             e2e/fixture-module/.foundry-test/versions/${{ steps.foundry.outputs.version }}
           key: foundry-build-${{ steps.foundry.outputs.version }}
-          # Caches from before the split held the build too; reuse them
-          # rather than downloading from foundryvtt.com again.
-          restore-keys: e2e-foundry-${{ steps.foundry.outputs.version }}-
 
       - name: Cache seeded world
         uses: actions/cache@v6
@@ -77,6 +74,13 @@ jobs:
           FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
           FOUNDRY_USERNAME: ${{ secrets.FOUNDRY_USERNAME }}
           FOUNDRY_PASSWORD: ${{ secrets.FOUNDRY_PASSWORD }}
+
+      # Caches are saved after the last step. The license is tied to this
+      # runner, so a restored copy is useless (the kit re-licenses), and
+      # leaving it out keeps it from anyone who can read the cache.
+      - name: Remove license before caching
+        if: always()
+        run: rm -f .foundry-test/Data-test-*/Config/license.json
 
       - name: Upload failure evidence
         if: failure()
