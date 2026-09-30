@@ -1,10 +1,11 @@
 /**
- * Resolving the symbolic version "latest" to the newest stable Foundry
- * release, from the public release notes list on foundryvtt.com.
+ * Resolving symbolic versions — "latest" (newest stable release) and
+ * "latest-<major>" (newest stable release of that major, e.g. "latest-13")
+ * — from the public release notes list on foundryvtt.com.
  */
 import { FOUNDRY_SITE, type Fetch } from "./foundryvtt.js";
 
-export const LATEST = "latest";
+const SYMBOLIC_VERSION = /^latest(?:-(\d+))?$/;
 
 export interface ReleaseEntry {
   version: string;
@@ -28,19 +29,26 @@ export function compareVersions(left: string, right: string): number {
   return leftMajor - rightMajor || leftBuild - rightBuild;
 }
 
-/** The newest stable version listed. */
-export function latestStableVersion(releases: ReleaseEntry[]): string {
-  const stable = releases.filter((release) => release.stable).map((release) => release.version);
-  if (stable.length === 0) throw new Error("latestStableVersion: no stable releases listed on foundryvtt.com");
+/** The newest stable version listed, optionally within one major version. */
+export function latestStableVersion(releases: ReleaseEntry[], major?: number): string {
+  const stable = releases
+    .filter((release) => release.stable && (major === undefined || release.version.startsWith(`${major}.`)))
+    .map((release) => release.version);
+  if (stable.length === 0) {
+    const scope = major === undefined ? "" : ` for version ${major}`;
+    throw new Error(`latestStableVersion: no stable releases${scope} listed on foundryvtt.com`);
+  }
   return stable.sort(compareVersions).at(-1) as string;
 }
 
-/** Resolves "latest" to the newest stable release; other versions pass through. */
+/** Resolves "latest" / "latest-<major>" to a stable release number; other versions pass through. */
 export async function resolveVersion(version: string, fetchImpl: Fetch = fetch): Promise<string> {
-  if (version !== LATEST) return version;
+  const symbolic = version.match(SYMBOLIC_VERSION);
+  if (!symbolic) return version;
   const response = await fetchImpl(`${FOUNDRY_SITE}/releases/`);
   if (!response.ok) {
     throw new Error(`resolveVersion: foundryvtt.com returned ${response.status} for the release list`);
   }
-  return latestStableVersion(parseReleases(await response.text()));
+  const major = symbolic[1] === undefined ? undefined : Number(symbolic[1]);
+  return latestStableVersion(parseReleases(await response.text()), major);
 }

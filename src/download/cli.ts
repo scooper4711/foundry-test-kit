@@ -2,8 +2,8 @@
 /**
  * Foundry VTT builds from foundryvtt.com.
  *
- *   download/cli.js --resolve latest
- *     prints the newest stable version (other versions print unchanged)
+ *   download/cli.js --resolve latest | latest-13
+ *     prints the newest stable version (of that major); others print unchanged
  *   download/cli.js --version 14.367 --out .foundry-test/cache/FoundryVTT-Node-14.367.zip
  *     downloads that Node.js build with FOUNDRY_USERNAME / FOUNDRY_PASSWORD
  */

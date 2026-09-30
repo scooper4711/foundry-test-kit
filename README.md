@@ -63,16 +63,16 @@ Add `foundry-test.config.json` at your project root:
 }
 ```
 
-| Field             | Meaning                                                                                         | Default                           |
-| ----------------- | ----------------------------------------------------------------------------------------------- | --------------------------------- |
-| `moduleId`        | Your module's id (its folder under `Data/modules`)                                              | required                          |
-| `foundryVersion`  | Foundry build to run, or `latest` for the newest stable release                                 | `14.367`                          |
-| `testWorlds`      | Worlds the suite runs against; one Playwright project per `system`                              | one `integration-test` pf2e world |
-| `devWorld`        | World `foundry-test dev start` boots into                                                       | `dev-test`                        |
-| `systems`         | Game systems installed when seeding a data directory                                            | every system named by a world     |
-| `seed.settings`   | Module settings written into freshly seeded worlds (`value`, or `fromEnv` — skipped when unset) | none                              |
-| `coverage.bundle` | Your built bundle, relative to the project root (must have a sourcemap)                         | `dist/main.js`                    |
-| `workDir`         | Where the kit keeps Foundry builds, servers, data directories, logs, and sessions               | `.foundry-test`                   |
+| Field             | Meaning                                                                                           | Default                           |
+| ----------------- | ------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `moduleId`        | Your module's id (its folder under `Data/modules`)                                                | required                          |
+| `foundryVersion`  | Foundry build to run: a version, `latest` (newest stable), or `latest-<major>` (e.g. `latest-13`) | `14.367`                          |
+| `testWorlds`      | Worlds the suite runs against; one Playwright project per `system`                                | one `integration-test` pf2e world |
+| `devWorld`        | World `foundry-test dev start` boots into                                                         | `dev-test`                        |
+| `systems`         | Game systems installed when seeding a data directory                                              | every system named by a world     |
+| `seed.settings`   | Module settings written into freshly seeded worlds (`value`, or `fromEnv` — skipped when unset)   | none                              |
+| `coverage.bundle` | Your built bundle, relative to the project root (must have a sourcemap)                           | `dist/main.js`                    |
+| `workDir`         | Where the kit keeps Foundry builds, servers, data directories, logs, and sessions                 | `.foundry-test`                   |
 
 Your project root is symlinked into each data directory as the module, so the
 built bundle and `module.json` are served straight from your working tree.
@@ -180,10 +180,12 @@ npx foundry-test test run --headed   # watch it (needs a display)
 Against a server that is already running, plain Playwright works too:
 `npx playwright test --project=pf2e`.
 
-`--version latest` (or `"foundryVersion": "latest"`) runs the newest stable
-release listed on foundryvtt.com; the cache and data directories still use its
-number (e.g. `Data-test-14.368`). Offline, `latest` falls back to the newest
-version already unpacked.
+`--version latest` runs the newest stable release listed on foundryvtt.com,
+and `--version latest-13` the newest stable 13.x — handy for keeping a module
+compatible with the previous major. Directories still use the concrete number
+(e.g. `Data-test-14.368`, `Data-test-13.351`), so versions never mix. Offline,
+a symbolic version falls back to the newest matching version already unpacked.
+`npx foundry-test resolve latest-13` prints what a symbolic version means today.
 
 Everything lives in `.foundry-test/` (the config's `workDir`): Foundry builds in
 `cache/FoundryVTT-Node-<version>.zip`, unpacked servers in `versions/`, one
@@ -265,6 +267,10 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        foundry: [latest, latest-13]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -274,17 +280,21 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
 
-      - name: Cache Foundry builds and seeded worlds
+      - name: Resolve Foundry version
+        id: foundry
+        run: echo "version=$(npx foundry-test resolve ${{ matrix.foundry }})" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Foundry build and seeded worlds
         uses: actions/cache@v6
         with:
           path: |
-            .foundry-test/cache
-            .foundry-test/versions
-            .foundry-test/Data-test-*
-          key: foundry-${{ hashFiles('foundry-test.config.json') }}
+            .foundry-test/cache/FoundryVTT-Node-${{ steps.foundry.outputs.version }}.zip
+            .foundry-test/versions/${{ steps.foundry.outputs.version }}
+            .foundry-test/Data-test-${{ steps.foundry.outputs.version }}
+          key: foundry-${{ steps.foundry.outputs.version }}-${{ hashFiles('foundry-test.config.json') }}
 
       - name: Integration tests
-        run: npx foundry-test test run --all-worlds
+        run: npx foundry-test test run --all-worlds --version ${{ steps.foundry.outputs.version }}
         env:
           FOUNDRY_LICENSE_KEY: ${{ secrets.FOUNDRY_LICENSE_KEY }}
           FOUNDRY_USERNAME: ${{ secrets.FOUNDRY_USERNAME }}
@@ -297,9 +307,12 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-results
+          name: playwright-results-${{ steps.foundry.outputs.version }}
           path: test-results/
 ```
+
+The cache key includes the resolved version, so a new Foundry release is
+downloaded and seeded once, then reused.
 
 Secrets from pull requests opened from forks are not available to workflows,
 so forked PRs cannot run this job; gate it with

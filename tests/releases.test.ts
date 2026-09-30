@@ -44,6 +44,11 @@ describe("latestStableVersion", () => {
     expect(latestStableVersion(parseReleases(PAGE))).toBe("14.368");
   });
 
+  it("limits to one major version", () => {
+    expect(latestStableVersion(parseReleases(PAGE), 13)).toBe("13.400");
+    expect(() => latestStableVersion(parseReleases(PAGE), 12)).toThrow(/no stable releases for version 12/);
+  });
+
   it("explains an empty list", () => {
     expect(() => latestStableVersion([])).toThrow(/no stable releases/);
   });
@@ -54,6 +59,11 @@ describe("resolveVersion", () => {
 
   it("resolves latest from the release list", async () => {
     expect(await resolveVersion("latest", fetchPage)).toBe("14.368");
+  });
+
+  it("resolves latest-<major> within that major", async () => {
+    expect(await resolveVersion("latest-13", fetchPage)).toBe("13.400");
+    expect(await resolveVersion("latest-14", fetchPage)).toBe("14.368");
   });
 
   it("passes concrete versions through without fetching", async () => {

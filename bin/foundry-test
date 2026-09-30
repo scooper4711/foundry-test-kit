@@ -12,6 +12,7 @@ set -euo pipefail
 #   foundry-test test stop | status
 #   foundry-test test run [--version VER|URL] [--world ID] [--keep] [--clean]
 #   foundry-test test run --all-worlds [...]
+#   foundry-test resolve latest|latest-<major>   (prints e.g. 14.368)
 #
 # `run` runs the Playwright project named after the world's game system.
 # --all-worlds runs every world in the config's testWorlds in turn (or
@@ -19,7 +20,8 @@ set -euo pipefail
 # and starting from fresh e2e coverage.
 #
 # Flags: --port PORT, --world ID, --world-title TITLE, --version VER|URL
-#   (VER may be "latest": the newest stable release, resolved to its number),
+#   (VER may be "latest" or "latest-<major>", e.g. latest-13: the newest
+#   stable release overall or of that major, resolved to its number),
 #   --keep (leave the server up after `run`), --clean (delete the world and
 #   server logs first so the next boot re-seeds from scratch), --headed
 #   (visible browser for seeding and tests; needs a display).
@@ -59,6 +61,13 @@ resolve_script() {
 }
 KIT_DIR="$(cd "$(dirname "$(resolve_script "${BASH_SOURCE[0]}")")/.." && pwd)"
 kit_node() { node "$KIT_DIR/dist/$1" "${@:2}"; }
+
+# `foundry-test resolve <version>` prints the concrete version (for CI
+# cache keys); it needs no config or server.
+if [ "${1:-}" = "resolve" ]; then
+  kit_node download/cli.js --resolve "${2:-latest}"
+  exit $?
+fi
 
 # Project settings from foundry-test.config.json (KIT_* variables).
 KIT_CONFIG="$(kit_node cli/shell-config.js env)" || exit 1
@@ -148,19 +157,23 @@ if [ -n "$WORLD_ID" ] && [ -z "$WORLD_TITLE" ]; then
 fi
 VERSION="${VERSION:-${FOUNDRY_VERSION:-$DEFAULT_VERSION}}"
 
-# "latest" names the newest stable release; directories always use the
-# concrete version. Offline, fall back to the newest version unpacked here.
-if [ "$VERSION" = "latest" ]; then
-  if RESOLVED="$(kit_node download/cli.js --resolve latest 2>/dev/null)"; then
+# "latest" names the newest stable release and "latest-<major>" the newest
+# of that major (e.g. latest-13); directories always use the concrete
+# version. Offline, fall back to the newest matching version unpacked here.
+if [[ "$VERSION" =~ ^latest(-([0-9]+))?$ ]]; then
+  SYMBOLIC="$VERSION"
+  MAJOR_PREFIX="${BASH_REMATCH[2]:+${BASH_REMATCH[2]}.}"
+  if RESOLVED="$(kit_node download/cli.js --resolve "$SYMBOLIC" 2>/dev/null)"; then
     VERSION="$RESOLVED"
-    echo "latest = Foundry $VERSION"
+    echo "$SYMBOLIC = Foundry $VERSION"
   else
-    VERSION="$(find "$VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -t. -k1,1n -k2,2n | tail -n 1)"
+    VERSION="$(find "$VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d -name "${MAJOR_PREFIX}*" -exec basename {} \; 2>/dev/null \
+      | sort -t. -k1,1n -k2,2n | tail -n 1)"
     if [ -z "$VERSION" ]; then
-      echo "ERROR: cannot resolve \"latest\" (foundryvtt.com unreachable) and no Foundry version is unpacked." >&2
+      echo "ERROR: cannot resolve \"$SYMBOLIC\" (foundryvtt.com unreachable) and no matching version is unpacked." >&2
       exit 1
     fi
-    echo "WARNING: cannot reach foundryvtt.com; using the newest local version, $VERSION." >&2
+    echo "WARNING: cannot reach foundryvtt.com; using the newest local match for $SYMBOLIC, $VERSION." >&2
   fi
 fi
 
