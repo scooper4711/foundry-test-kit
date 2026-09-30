@@ -24,6 +24,7 @@ const SYSTEM_DISPLAY_NAMES: Record<string, string> = {
   pf2e: "Pathfinder Second Edition",
   sf2e: "Starfinder Second Edition",
   dnd5e: "Dungeons & Dragons Fifth Edition",
+  worldbuilding: "Simple Worldbuilding System",
 };
 
 export function systemDisplayName(systemId: string): string {

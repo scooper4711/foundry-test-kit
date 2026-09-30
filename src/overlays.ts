@@ -4,15 +4,7 @@
  * directory but never on the second run, the classic clean-checkout flake.
  */
 import type { Locator, Page } from "@playwright/test";
-
-/**
- * The administrator password input on /auth or the admin prompt over setup.
- * Matched by its name, which is stable across Foundry 13 and 14 (the label
- * is a placeholder in 13 and an aria-label in 14); Enter submits its form.
- */
-export function adminPasswordField(page: Page): Locator {
-  return page.locator('input[name="adminPassword"]:visible').first();
-}
+import { adminPasswordField } from "./foundry-ui.js";
 
 /** Button labels that unambiguously dismiss (never accept) a popup. */
 const DISMISS_BUTTON_NAMES = [
@@ -72,42 +64,62 @@ export async function dismissTours(page: Page): Promise<void> {
 export async function dismissOverlays(page: Page): Promise<void> {
   // Tours first: they can cover everything else.
   await dismissTours(page);
-  // Then wait for dismissable popups one at a time: toast notifications
-  // or buttons whose label unambiguously dismisses. No popup within the
-  // wait means the UI is clear.
+  // Then clear popups one at a time, dismiss buttons before toast
+  // notifications: a permanent notification (Foundry 12 on a newer Node
+  // shows one) is re-rendered after removal and must not use up every round.
+  let notificationClears = 0;
   for (let round = 0; round < OVERLAY_MAX_ROUNDS; round++) {
-    const found: string | null = await page
-      .waitForFunction(
-        (names: string[]) => {
-          if (document.querySelector("#notifications li")) return "notifications";
-          const buttons = Array.from(document.querySelectorAll("button"));
-          for (const button of buttons) {
-            const label = (button.textContent ?? "").trim();
-            if (!names.includes(label)) continue;
-            const rect = button.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) return label;
-          }
-          return null;
-        },
-        DISMISS_BUTTON_NAMES,
-        { timeout: OVERLAY_WAIT_MS }
-      )
-      .then((handle) => handle.jsonValue())
-      .catch(() => null);
+    const found = await nextOverlay(page, notificationClears < MAX_NOTIFICATION_CLEARS);
     if (found === null) return;
-    if (found === "notifications") {
+    if (found === NOTIFICATIONS) {
+      notificationClears += 1;
       await page
-        .evaluate(() => {
-          document.querySelectorAll("#notifications li").forEach((el) => el.remove());
-        })
+        .evaluate(() => document.querySelectorAll("#notifications li").forEach((el) => el.remove()))
         .catch(() => {});
       continue;
     }
-    const button = page.getByRole("button", { name: found, exact: true });
-    if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await button.click().catch(() => {});
-    }
+    await dismissButton(page, found)
+      .click({ timeout: 2000 })
+      .catch(() => {});
   }
+}
+
+/**
+ * A visible button whose text is exactly `label`. Matched on text content,
+ * not accessible name: icon glyphs (Font Awesome ::before content) end up in
+ * Chromium's accessible names, so getByRole(name) misses buttons like
+ * Foundry 12's "Decline Sharing".
+ */
+function dismissButton(page: Page, label: string): Locator {
+  const exactText = new RegExp(`^\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
+  return page.locator("button:visible", { hasText: exactText }).first();
+}
+
+const NOTIFICATIONS = "notifications";
+/** Toast clears per call; permanent toasts come straight back. */
+const MAX_NOTIFICATION_CLEARS = 2;
+
+/**
+ * Waits for the next thing to dismiss: the label of a visible dismiss
+ * button, else "notifications" (when `includeNotifications`), else null once
+ * nothing appears within the wait.
+ */
+async function nextOverlay(page: Page, includeNotifications: boolean): Promise<string | null> {
+  return page
+    .waitForFunction(
+      ({ names, notifications }) => {
+        for (const button of Array.from(document.querySelectorAll("button"))) {
+          const label = (button.textContent ?? "").trim();
+          const rect = button.getBoundingClientRect();
+          if (names.includes(label) && rect.width > 0 && rect.height > 0) return label;
+        }
+        return notifications && document.querySelector("#notifications li") ? "notifications" : null;
+      },
+      { names: DISMISS_BUTTON_NAMES, notifications: includeNotifications },
+      { timeout: OVERLAY_WAIT_MS }
+    )
+    .then((handle) => handle.jsonValue() as Promise<string>)
+    .catch(() => null);
 }
 
 /**
@@ -136,5 +148,22 @@ export async function ensureAdminAccess(page: Page, password: string): Promise<v
     if (Date.now() > deadline) {
       throw new Error("administrator access prompt never cleared");
     }
+  }
+}
+
+/**
+ * Clicks a setup-screen control, clearing any popup that intercepts the
+ * click (Foundry 12 and 13 raise their usage-data prompt a few seconds after
+ * setup loads, so dismissing up front can miss it) and retrying.
+ */
+export async function clickPastPopups(page: Page, target: Locator, attempts = 4): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    const clicked = await target.click({ timeout: 10_000 }).then(
+      () => true,
+      () => false
+    );
+    if (clicked) return;
+    if (attempt >= attempts) throw new Error(`clickPastPopups: could not click ${target} after ${attempts} attempts`);
+    await dismissOverlays(page);
   }
 }

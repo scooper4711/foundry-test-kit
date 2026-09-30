@@ -6,11 +6,12 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      // Browser automation is exercised by the consuming modules' integration
-      // suites against a live Foundry server, not by unit tests.
+      // Browser automation is exercised against live Foundry servers by the
+      // e2e fixture suite (e2e/fixture-module, on 12–14), not by unit tests.
       exclude: [
         "src/index.ts",
         "src/fixtures.ts",
+        "src/foundry-ui.ts",
         "src/overlays.ts",
         "src/session.ts",
         "src/world.ts",

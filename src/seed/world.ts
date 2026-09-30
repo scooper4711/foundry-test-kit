@@ -3,39 +3,55 @@
  * picker and the first-run data migration), then launch it.
  */
 import type { Page } from "@playwright/test";
-import { dismissOverlays } from "../overlays.js";
+import {
+  createWorldSubmit,
+  setupTab,
+  worldEntry,
+  worldLaunchControl,
+  worldSystemDropdown,
+  worldSystemListItem,
+  worldTitleField,
+} from "../foundry-ui.js";
+import { clickPastPopups, dismissOverlays } from "../overlays.js";
 import { log, systemDisplayName } from "./options.js";
 
 const CREATION_TIMEOUT_MS = 300_000;
 
 export async function createWorld(page: Page, worldTitle: string, worldSystem: string): Promise<void> {
   log(`>>> Creating world "${worldTitle}" (${systemDisplayName(worldSystem)})...`);
-  await page.getByRole("heading", { name: "Game Worlds" }).click();
+  await setupTab(page, "Game Worlds").click();
   await page.waitForTimeout(1000);
   if (
-    await page
-      .locator("article", { hasText: worldTitle })
+    await worldEntry(page, worldTitle)
       .isVisible({ timeout: 2000 })
       .catch(() => false)
   ) {
     log(">>> World already exists.");
     return;
   }
-  await page.getByRole("button", { name: "Create World" }).click();
+  await clickPastPopups(page, page.getByRole("button", { name: "Create World" }));
   await page.waitForTimeout(2000);
-  // The setup form uses plain divs as captions, so getByLabel() cannot
-  // associate them — anchor on the caption text instead.
-  const titleField = page.getByText("World Title", { exact: true }).locator("xpath=..").getByRole("textbox");
-  await titleField.fill(worldTitle, { timeout: 30_000 });
-  await page
-    .getByRole("listitem")
-    .filter({ hasText: systemDisplayName(worldSystem) })
-    .click({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 30_000 });
+  await worldTitleField(page).fill(worldTitle, { timeout: 30_000 });
+  await chooseSystemAndSubmit(page, worldSystem);
   await pickBlankTemplate(page);
   await page.waitForTimeout(3000);
   await waitForCreation(page);
   log(">>> World created.");
+}
+
+/**
+ * Foundry 12 picks the system from a <select> and submits with Create World;
+ * 13+ lists systems and moves on with Continue.
+ */
+async function chooseSystemAndSubmit(page: Page, worldSystem: string): Promise<void> {
+  const systemDropdown = worldSystemDropdown(page);
+  if (await systemDropdown.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await systemDropdown.selectOption(worldSystem);
+    await createWorldSubmit(page).click({ timeout: 30_000 });
+    return;
+  }
+  await worldSystemListItem(page, worldSystem).click({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 30_000 });
 }
 
 /** Creation can land on a template picker (/create): choose Blank World. */
@@ -86,7 +102,7 @@ async function waitForCreation(page: Page): Promise<void> {
 
 /** Creation may finish into the worlds list or user management (same URL). */
 async function creationMovedOn(page: Page): Promise<boolean> {
-  const worlds = page.getByRole("heading", { name: "Game Worlds" });
+  const worlds = setupTab(page, "Game Worlds");
   const saveAndContinue = page.getByRole("button", { name: "Save and Continue" });
   return (
     (await worlds.isVisible({ timeout: 2000 }).catch(() => false)) ||
@@ -110,12 +126,11 @@ export async function launchWorld(page: Page, worldTitle: string): Promise<void>
     return;
   }
   log("-> Launching test world...");
-  await page.getByRole("heading", { name: "Game Worlds" }).click({ timeout: 30_000 });
+  await setupTab(page, "Game Worlds").click({ timeout: 30_000 });
   await page.waitForTimeout(2000);
-  const launch = page
-    .locator("article", { hasText: worldTitle })
-    .locator("[data-action='worldLaunch'], button:has-text('Launch')");
-  await launch.first().click({ timeout: 60_000 });
+  const entry = worldEntry(page, worldTitle);
+  await entry.hover({ timeout: 30_000 });
+  await worldLaunchControl(entry).click({ timeout: 60_000 });
   await page.waitForURL(/\/(join|game)/, { timeout: 60_000 });
   log("-> World launched.");
 }
