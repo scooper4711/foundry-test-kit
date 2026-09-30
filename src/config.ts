@@ -5,6 +5,14 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import {
+  findSeedUser,
+  normalizeSeedUsers,
+  type RawSeedUsers,
+  type SeedUser,
+  type SeedUsersConfig,
+  type UserRole,
+} from "./users.js";
 
 export const CONFIG_FILE_NAME = "foundry-test.config.json";
 
@@ -37,7 +45,8 @@ export interface TestKitConfig {
   devWorld: WorldConfig;
   /** Game systems installed in every seeded data directory. */
   systems: string[];
-  seed: { settings: SeedSetting[] };
+  /** Module settings and users written into freshly seeded worlds. */
+  seed: { settings: SeedSetting[] } & SeedUsersConfig;
   coverage: { bundle: string };
   /**
    * Absolute path of the kit's working directory: Foundry builds, unpacked
@@ -49,9 +58,10 @@ export interface TestKitConfig {
   projectRoot: string;
 }
 
-type RawConfig = Partial<Omit<TestKitConfig, "testWorlds" | "devWorld" | "projectRoot">> & {
+type RawConfig = Partial<Omit<TestKitConfig, "testWorlds" | "devWorld" | "projectRoot" | "seed">> & {
   testWorlds?: Partial<WorldConfig>[];
   devWorld?: Partial<WorldConfig>;
+  seed?: { settings?: SeedSetting[] } & RawSeedUsers;
 };
 
 /** Where the kit keeps everything it downloads and writes. */
@@ -78,6 +88,14 @@ export function loadTestKitConfig(startDirectory: string = process.cwd()): TestK
   return normalizeConfig(raw, dirname(configPath));
 }
 
+/**
+ * The first configured test user with `role` (default "player"), so specs
+ * name users through the config rather than repeating them.
+ */
+export function testUser(role: UserRole = "player"): SeedUser {
+  return findSeedUser(loadTestKitConfig().seed, role);
+}
+
 /** Fills defaults and validates a parsed config file. */
 export function normalizeConfig(raw: RawConfig, projectRoot: string): TestKitConfig {
   if (!raw.moduleId) {
@@ -91,7 +109,7 @@ export function normalizeConfig(raw: RawConfig, projectRoot: string): TestKitCon
     testWorlds,
     devWorld,
     systems: raw.systems?.length ? raw.systems : uniqueSystems([...testWorlds, devWorld]),
-    seed: { settings: raw.seed?.settings ?? [] },
+    seed: { settings: raw.seed?.settings ?? [], ...normalizeSeedUsers(raw.seed) },
     coverage: { bundle: raw.coverage?.bundle ?? "dist/main.js" },
     workDir: resolve(projectRoot, raw.workDir ?? DEFAULT_WORK_DIR),
     projectRoot: resolve(projectRoot),

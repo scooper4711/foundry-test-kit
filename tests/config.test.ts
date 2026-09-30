@@ -13,7 +13,11 @@ describe("normalizeConfig", () => {
       testWorlds: [{ id: "integration-test", system: "pf2e", title: "Integration Test" }],
       devWorld: { id: "dev-test", system: "pf2e", title: "Dev Test" },
       systems: ["pf2e"],
-      seed: { settings: [] },
+      seed: {
+        settings: [],
+        gamemaster: { name: "Gamemaster", password: "" },
+        users: [{ name: "TestPlayer", role: "player", password: "" }],
+      },
       coverage: { bundle: "dist/main.js" },
       workDir: "/project/.foundry-test",
       projectRoot: "/project",
