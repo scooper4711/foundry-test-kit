@@ -352,6 +352,16 @@ dotenvx private key as a secret and run through dotenvx:
     DOTENV_PRIVATE_KEY: ${{ secrets.DOTENV_PRIVATE_KEY }}
 ```
 
+## Releasing
+
+From an up-to-date `main`, run `scripts-build/release.sh` (optionally with
+`patch`, `minor`, `major`, `beta` or `rc`). It picks the next version from
+the Conventional Commits since the last tag, updates `CHANGELOG.md`, pushes a
+signed tag and opens a draft GitHub release. Publishing that release runs
+`.github/workflows/release.yml`, which stamps the version from the tag into
+`package.json` (it holds `#VERSION#` in the repository) and publishes to npm
+through trusted publishing, with build provenance.
+
 ## License
 
 MIT

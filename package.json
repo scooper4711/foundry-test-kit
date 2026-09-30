@@ -1,6 +1,6 @@
 {
   "name": "@scooper4711/foundry-test-kit",
-  "version": "0.1.0",
+  "version": "#VERSION#",
   "description": "Playwright integration testing for Foundry VTT modules: server lifecycle, world seeding, Gamemaster and player sessions, and end-to-end coverage.",
   "keywords": [
     "foundryvtt",
@@ -40,7 +40,8 @@
     "lint": "eslint src tests",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "npm run build && cd e2e/fixture-module && ../../bin/foundry-test test run"
+    "e2e": "npm run build && cd e2e/fixture-module && ../../bin/foundry-test test run",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.50.0"
