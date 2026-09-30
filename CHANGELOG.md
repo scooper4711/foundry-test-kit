@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-09-30
+
+### Fixed
+
+- Retry rate-limited foundryvtt.com requests
+
+### Changed
+
+- Drop the release script symlink
+- Explain why release-only CI needs a manual run on main
+- Run E2E only on releases and by hand
+- Suggest a pre-tag hook for local release checks
+- Discourage hosted CI and explain how to cache Foundry
+- Keep the Foundry license out of CI caches
+- Cache Foundry builds by version and cancel superseded E2E runs
+
+[0.2.1]: https://github.com/scooper4711/foundry-test-kit/releases/tag/v0.2.1
+
 ## [0.2.0] - 2026-09-30
 
 ### Added
