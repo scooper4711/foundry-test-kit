@@ -6,12 +6,17 @@ import {
   deleteActorsByPrefix,
   disableSceneCanvas,
   joinAsPlayer,
+  joinAsUser,
+  loadTestKitConfig,
   readActorFlag,
   setSetting,
   suiteContextOptions,
   test,
+  testUser,
   expect,
+  USER_ROLE_LEVELS,
 } from "@scooper4711/foundry-test-kit";
+import type { Browser, Page } from "@playwright/test";
 
 const MODULE_ID = "foundry-test-kit-fixture";
 
@@ -20,7 +25,7 @@ interface FixtureGlobals {
     version: string;
     system: { id: string };
     modules: Map<string, { active: boolean }>;
-    user: { isGM: boolean; name: string };
+    user: { isGM: boolean; name: string; role: number };
   };
   foundryTestKitFixtureReady?: boolean;
 }
@@ -34,10 +39,12 @@ test("the seeded world runs the module", async ({ gmPage }) => {
       active: g.game.modules.get(moduleId)?.active ?? false,
       loaded: g.foundryTestKitFixtureReady === true,
       isGM: g.game.user.isGM,
+      userName: g.game.user.name,
     };
   }, MODULE_ID);
   console.log(`Foundry ${world.version}, system ${world.system}`);
-  expect(world).toMatchObject({ system: "worldbuilding", active: true, loaded: true, isGM: true });
+  // The fixtures join as the configured (renamed, password-protected) Gamemaster.
+  expect(world).toMatchObject({ system: "worldbuilding", active: true, loaded: true, isGM: true, userName: "Kit GM" });
   if (process.env.EXPECTED_FOUNDRY_MAJOR) expect(world.version.split(".")[0]).toBe(process.env.EXPECTED_FOUNDRY_MAJOR);
 });
 
@@ -62,19 +69,33 @@ test("world helpers create, flag, and clean up actors", async ({ gmPage }) => {
   await setSetting(gmPage, "core", "time", 0);
 });
 
-test("the seeded test player can join", async ({ browser }) => {
+test("the first seeded player joins by default", async ({ browser }) => {
+  const user = await asNewUser(browser, (page) => joinAsPlayer(page));
+  expect(user).toEqual({ name: testUser().name, role: USER_ROLE_LEVELS.player, isGM: false });
+});
+
+test("every seeded user joins at its role, with its password", async ({ browser }) => {
+  for (const seeded of loadTestKitConfig().seed.users) {
+    const user = await asNewUser(browser, (page) => joinAsUser(page, seeded.name));
+    // Foundry counts Assistant GMs and up as GMs.
+    const role = USER_ROLE_LEVELS[seeded.role];
+    expect(user).toEqual({ name: seeded.name, role, isGM: role >= USER_ROLE_LEVELS.assistant });
+  }
+});
+
+/** Joins in a fresh context and reports who the page is logged in as. */
+async function asNewUser(browser: Browser, join: (page: Page) => Promise<void>) {
   const context = await browser.newContext(suiteContextOptions());
   await disableSceneCanvas(context);
   try {
     const page = await context.newPage();
-    await joinAsPlayer(page, "TestPlayer");
+    await join(page);
     // Read fields explicitly: isGM is a getter, which does not serialize.
-    const user = await page.evaluate(() => {
-      const { name, isGM } = (globalThis as unknown as FixtureGlobals).game.user;
-      return { name, isGM };
+    return await page.evaluate(() => {
+      const { name, role, isGM } = (globalThis as unknown as FixtureGlobals).game.user;
+      return { name, role, isGM };
     });
-    expect(user).toMatchObject({ name: "TestPlayer", isGM: false });
   } finally {
     await context.close();
   }
-});
+}
