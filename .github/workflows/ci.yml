@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx vitest run --coverage
+      - run: npm run build
