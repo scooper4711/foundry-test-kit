@@ -505,13 +505,12 @@ workflow can read the cached Foundry build.
 
 ## Releasing
 
-From an up-to-date `main`, run `scripts-build/release.sh` (optionally with
-`patch`, `minor`, `major`, `beta` or `rc`). It picks the next version from
-the Conventional Commits since the last tag, updates `CHANGELOG.md`, pushes a
-signed tag and opens a draft GitHub release. Publishing that release runs
-`.github/workflows/release.yml`, which stamps the version from the tag into
-`package.json` (it holds `#VERSION#` in the repository) and publishes to npm
-through trusted publishing, with build provenance.
+A release is a signed `vX.Y.Z` tag on `main`, with its `CHANGELOG.md` entry and
+a draft GitHub release. The version follows the Conventional Commits since the
+last tag. Publishing the draft runs `.github/workflows/release.yml`, which
+stamps the version from the tag into `package.json` (it holds `#VERSION#` in
+the repository) and publishes to npm through trusted publishing, with build
+provenance.
 
 ## License
 
