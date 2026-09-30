@@ -1,22 +1,32 @@
 #!/usr/bin/env node
 /**
- * Downloads a Foundry VTT Node.js build from foundryvtt.com using the
- * account in FOUNDRY_USERNAME / FOUNDRY_PASSWORD.
+ * Foundry VTT builds from foundryvtt.com.
  *
- *   download/cli.js --version 14.367 --out playwright/cache/FoundryVTT-Node-14.367.zip
+ *   download/cli.js --resolve latest
+ *     prints the newest stable version (other versions print unchanged)
+ *   download/cli.js --version 14.367 --out .foundry-test/cache/FoundryVTT-Node-14.367.zip
+ *     downloads that Node.js build with FOUNDRY_USERNAME / FOUNDRY_PASSWORD
  */
 import { parseArgs } from "node:util";
 import { isMainModule } from "../cli/is-main.js";
 import { downloadFoundryBuild } from "./foundryvtt.js";
+import { resolveVersion } from "./releases.js";
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({ options: { version: { type: "string" }, out: { type: "string" } } });
+  const { values } = parseArgs({
+    options: { resolve: { type: "string" }, version: { type: "string" }, out: { type: "string" } },
+  });
+  if (values.resolve) {
+    console.log(await resolveVersion(values.resolve));
+    return;
+  }
   const username = process.env.FOUNDRY_USERNAME;
   const password = process.env.FOUNDRY_PASSWORD;
-  if (!values.version || !values.out) throw new Error("download: usage: --version VER --out FILE");
+  if (!values.version || !values.out) throw new Error("download: usage: --resolve VER | --version VER --out FILE");
   if (!username || !password) throw new Error("download: set FOUNDRY_USERNAME and FOUNDRY_PASSWORD");
-  console.log(`Downloading Foundry VTT ${values.version} (Node.js) from foundryvtt.com as ${username}...`);
-  await downloadFoundryBuild({ username, password }, values.version, values.out);
+  const version = await resolveVersion(values.version);
+  console.log(`Downloading Foundry VTT ${version} (Node.js) from foundryvtt.com as ${username}...`);
+  await downloadFoundryBuild({ username, password }, version, values.out);
   console.log(`Saved ${values.out}`);
 }
 

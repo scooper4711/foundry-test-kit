@@ -38,7 +38,7 @@ export const test = base.extend<FoundryTestOptions & FoundryTestFixtures, Foundr
   gamemasterSession: [
     async ({ browser }, use, workerInfo) => {
       const config = loadTestKitConfig();
-      const sessionDirectory = resolve(config.projectRoot, "tmp/playwright-sessions");
+      const sessionDirectory = resolve(config.workDir, "sessions");
       mkdirSync(sessionDirectory, { recursive: true });
       const statePath = resolve(sessionDirectory, `gamemaster-${workerInfo.workerIndex}.json`);
       const context = await browser.newContext(suiteContextOptions());

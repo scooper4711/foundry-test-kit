@@ -42,6 +42,7 @@ describe("renderShellEnv", () => {
     expect(bashValue(env, "KIT_SYSTEMS")).toBe("pf2e,sf2e");
     expect(bashValue(env, "KIT_PROJECT_ROOT")).toBe("/projects/my module");
     expect(bashValue(env, "KIT_BUNDLE")).toBe("dist/main.js");
+    expect(bashValue(env, "KIT_WORK_DIR")).toBe("/projects/my module/.foundry-test");
   });
 });
 

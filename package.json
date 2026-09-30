@@ -51,6 +51,7 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
+    "@dotenvx/dotenvx": "^2.32.2",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@types/convert-source-map": "^2.0.3",

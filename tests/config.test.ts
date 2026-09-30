@@ -15,6 +15,7 @@ describe("normalizeConfig", () => {
       systems: ["pf2e"],
       seed: { settings: [] },
       coverage: { bundle: "dist/main.js" },
+      workDir: "/project/.foundry-test",
       projectRoot: "/project",
     });
   });
@@ -27,6 +28,10 @@ describe("normalizeConfig", () => {
     expect(config.systems).toEqual(["pf2e", "sf2e"]);
     expect(config.testWorlds[1]).toEqual({ id: "sf", system: "sf2e", title: "SFS" });
     expect(config.testWorlds[0].title).toBe("pf");
+  });
+
+  it("resolves a custom work directory against the project root", () => {
+    expect(normalizeConfig({ moduleId: "m", workDir: "build/foundry" }, "/p").workDir).toBe("/p/build/foundry");
   });
 
   it("keeps explicitly listed systems", () => {

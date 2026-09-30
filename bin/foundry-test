@@ -18,16 +18,19 @@ set -euo pipefail
 # FOUNDRY_TEST_WORLDS, "id:system" pairs), switching the server between them
 # and starting from fresh e2e coverage.
 #
-# Flags: --port PORT, --world ID, --world-title TITLE, --version VER|URL,
+# Flags: --port PORT, --world ID, --world-title TITLE, --version VER|URL
+#   (VER may be "latest": the newest stable release, resolved to its number),
 #   --keep (leave the server up after `run`), --clean (delete the world and
 #   server logs first so the next boot re-seeds from scratch), --headed
 #   (visible browser for seeding and tests; needs a display).
 #
 # Defaults (override with flags or env):
-#   dev:  port 30000, data playwright/Data, world = config devWorld
-#   test: port 30001, data playwright/Data-<version>, world = first testWorld
+#   dev:  port 30000, data <workDir>/Data-dev-<version>, world = config devWorld
+#   test: port 30001, data <workDir>/Data-test-<version>, world = first testWorld
 #
-# Foundry builds are cached in playwright/cache as FoundryVTT-Node-<ver>.zip.
+# Everything lives in the config's workDir (default .foundry-test/): Foundry
+# builds cached in cache/FoundryVTT-Node-<ver>.zip, unpacked servers in
+# versions/, data directories, server logs in logs/, and saved sessions.
 # A missing build is downloaded from a URL argument, or from foundryvtt.com
 # when FOUNDRY_USERNAME and FOUNDRY_PASSWORD are set. Each version gets its
 # own data directory with the module symlinked in. Server identity
@@ -66,9 +69,9 @@ PROJECT_ROOT="$KIT_PROJECT_ROOT"
 DOTENV_EXPORTS="$(kit_node cli/shell-config.js dotenv)" || exit 1
 eval "$DOTENV_EXPORTS"
 
-PLAYWRIGHT_DIR="$PROJECT_ROOT/playwright"
-CACHE_DIR="$PLAYWRIGHT_DIR/cache"
-VERSIONS_DIR="$PLAYWRIGHT_DIR/versions"
+WORK_DIR="$KIT_WORK_DIR"
+CACHE_DIR="$WORK_DIR/cache"
+VERSIONS_DIR="$WORK_DIR/versions"
 MODULE_ID="$KIT_MODULE_ID"
 DEFAULT_VERSION="$KIT_FOUNDRY_VERSION"
 TEST_WORLDS="${FOUNDRY_TEST_WORLDS:-$KIT_TEST_WORLDS}"
@@ -145,6 +148,22 @@ if [ -n "$WORLD_ID" ] && [ -z "$WORLD_TITLE" ]; then
 fi
 VERSION="${VERSION:-${FOUNDRY_VERSION:-$DEFAULT_VERSION}}"
 
+# "latest" names the newest stable release; directories always use the
+# concrete version. Offline, fall back to the newest version unpacked here.
+if [ "$VERSION" = "latest" ]; then
+  if RESOLVED="$(kit_node download/cli.js --resolve latest 2>/dev/null)"; then
+    VERSION="$RESOLVED"
+    echo "latest = Foundry $VERSION"
+  else
+    VERSION="$(find "$VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -t. -k1,1n -k2,2n | tail -n 1)"
+    if [ -z "$VERSION" ]; then
+      echo "ERROR: cannot resolve \"latest\" (foundryvtt.com unreachable) and no Foundry version is unpacked." >&2
+      exit 1
+    fi
+    echo "WARNING: cannot reach foundryvtt.com; using the newest local version, $VERSION." >&2
+  fi
+fi
+
 # Headed browser for Playwright runs below (seed spec and suite inherit it).
 if [ "$HEADED" -eq 1 ]; then
   export PLAYWRIGHT_HEADED=true
@@ -173,12 +192,10 @@ SERVER_DIR="$VERSIONS_DIR/$VERSION/FoundryVTT-Node-$VERSION"
 if [ -n "${FOUNDRY_PATH:-}" ]; then
   SERVER_DIR="$FOUNDRY_PATH"
 fi
-DATA_DIR="${FOUNDRY_DATA_PATH:-$PLAYWRIGHT_DIR/Data-$VERSION}"
-if [ "$MODE" = "dev" ] && [ -z "${FOUNDRY_DATA_PATH:-}" ]; then
-  DATA_DIR="$PLAYWRIGHT_DIR/Data"
-fi
+DATA_DIR="${FOUNDRY_DATA_PATH:-$WORK_DIR/Data-$MODE-$VERSION}"
 PID_FILE="$DATA_DIR/foundry.pid"
-LOG_FILE="/tmp/foundry-$MODE-$VERSION.log"
+LOG_FILE="$WORK_DIR/logs/foundry-$MODE-$VERSION.log"
+mkdir -p "$WORK_DIR/logs"
 
 echo "=== Foundry $MODE env: version $VERSION ==="
 echo "Server: $SERVER_DIR"
@@ -405,7 +422,7 @@ run_world_suite() {
   seed_if_needed
   local system result_json status
   system="$(world_system)"
-  result_json="/tmp/foundry-$MODE-$VERSION-$WORLD_ID-results.json"
+  result_json="$WORK_DIR/logs/results-$MODE-$VERSION-$WORLD_ID.json"
   rm -f "$result_json"
   echo "Running $system integration tests against world $WORLD_ID..."
   set +e

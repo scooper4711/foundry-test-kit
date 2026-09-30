@@ -39,6 +39,12 @@ export interface TestKitConfig {
   systems: string[];
   seed: { settings: SeedSetting[] };
   coverage: { bundle: string };
+  /**
+   * Absolute path of the kit's working directory: Foundry builds, unpacked
+   * servers, data directories, logs, and saved sessions (configured as a
+   * path relative to the project root; default ".foundry-test").
+   */
+  workDir: string;
   /** Absolute path of the directory holding the config file. */
   projectRoot: string;
 }
@@ -47,6 +53,9 @@ type RawConfig = Partial<Omit<TestKitConfig, "testWorlds" | "devWorld" | "projec
   testWorlds?: Partial<WorldConfig>[];
   devWorld?: Partial<WorldConfig>;
 };
+
+/** Where the kit keeps everything it downloads and writes. */
+export const DEFAULT_WORK_DIR = ".foundry-test";
 
 const DEFAULT_TEST_WORLD: WorldConfig = { id: "integration-test", system: "pf2e", title: "Integration Test" };
 const DEFAULT_DEV_WORLD: WorldConfig = { id: "dev-test", system: "pf2e", title: "Dev Test" };
@@ -84,6 +93,7 @@ export function normalizeConfig(raw: RawConfig, projectRoot: string): TestKitCon
     systems: raw.systems?.length ? raw.systems : uniqueSystems([...testWorlds, devWorld]),
     seed: { settings: raw.seed?.settings ?? [] },
     coverage: { bundle: raw.coverage?.bundle ?? "dist/main.js" },
+    workDir: resolve(projectRoot, raw.workDir ?? DEFAULT_WORK_DIR),
     projectRoot: resolve(projectRoot),
   };
 }

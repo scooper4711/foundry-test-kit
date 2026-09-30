@@ -66,12 +66,13 @@ Add `foundry-test.config.json` at your project root:
 | Field             | Meaning                                                                                         | Default                           |
 | ----------------- | ----------------------------------------------------------------------------------------------- | --------------------------------- |
 | `moduleId`        | Your module's id (its folder under `Data/modules`)                                              | required                          |
-| `foundryVersion`  | Foundry build to run                                                                            | `14.367`                          |
+| `foundryVersion`  | Foundry build to run, or `latest` for the newest stable release                                 | `14.367`                          |
 | `testWorlds`      | Worlds the suite runs against; one Playwright project per `system`                              | one `integration-test` pf2e world |
 | `devWorld`        | World `foundry-test dev start` boots into                                                       | `dev-test`                        |
 | `systems`         | Game systems installed when seeding a data directory                                            | every system named by a world     |
 | `seed.settings`   | Module settings written into freshly seeded worlds (`value`, or `fromEnv` — skipped when unset) | none                              |
 | `coverage.bundle` | Your built bundle, relative to the project root (must have a sourcemap)                         | `dist/main.js`                    |
+| `workDir`         | Where the kit keeps Foundry builds, servers, data directories, logs, and sessions               | `.foundry-test`                   |
 
 Your project root is symlinked into each data directory as the module, so the
 built bundle and `module.json` are served straight from your working tree.
@@ -107,7 +108,7 @@ Add scripts and ignore the working directories:
 ```
 
 ```gitignore
-playwright/
+.foundry-test/
 test-results/
 coverage/
 tmp/
@@ -167,8 +168,8 @@ npx foundry-test-coverage                  # coverage/e2e/lcov.info for the last
 Servers:
 
 ```bash
-npx foundry-test dev start      # port 30000, playwright/Data, your devWorld
-npx foundry-test test start     # port 30001, playwright/Data-<version>, first testWorld
+npx foundry-test dev start      # port 30000, .foundry-test/Data-dev-<version>, your devWorld
+npx foundry-test test start     # port 30001, .foundry-test/Data-test-<version>, first testWorld
 npx foundry-test test status
 npx foundry-test test stop
 npx foundry-test test run --keep     # leave the server up afterwards
@@ -179,7 +180,16 @@ npx foundry-test test run --headed   # watch it (needs a display)
 Against a server that is already running, plain Playwright works too:
 `npx playwright test --project=pf2e`.
 
-Foundry builds are cached in `playwright/cache/FoundryVTT-Node-<version>.zip`.
+`--version latest` (or `"foundryVersion": "latest"`) runs the newest stable
+release listed on foundryvtt.com; the cache and data directories still use its
+number (e.g. `Data-test-14.368`). Offline, `latest` falls back to the newest
+version already unpacked.
+
+Everything lives in `.foundry-test/` (the config's `workDir`): Foundry builds in
+`cache/FoundryVTT-Node-<version>.zip`, unpacked servers in `versions/`, one
+data directory per server and version (`Data-dev-14.367`, `Data-test-14.367`),
+server logs and results in `logs/`, and saved Gamemaster sessions in
+`sessions/`. Nothing in it belongs in version control.
 A missing build is downloaded from foundryvtt.com with `FOUNDRY_USERNAME` and
 `FOUNDRY_PASSWORD` (your account must hold a license), or from a URL:
 `npx foundry-test test start https://…/FoundryVTT-Node-14.367.zip`.
@@ -268,9 +278,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: |
-            playwright/cache
-            playwright/versions
-            playwright/Data-*
+            .foundry-test/cache
+            .foundry-test/versions
+            .foundry-test/Data-test-*
           key: foundry-${{ hashFiles('foundry-test.config.json') }}
 
       - name: Integration tests

@@ -29,6 +29,7 @@ export function renderShellEnv(config: TestKitConfig): string {
     KIT_DEV_WORLD: config.devWorld.id,
     KIT_SYSTEMS: config.systems.join(","),
     KIT_BUNDLE: config.coverage.bundle,
+    KIT_WORK_DIR: config.workDir,
   };
   return Object.entries(variables)
     .map(([name, value]) => `${name}=${shellQuote(value)}`)
