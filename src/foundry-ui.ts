@@ -118,23 +118,33 @@ export function worldSystemListItem(page: Page, systemId: string): Locator {
   return page.locator(`li.package.system[data-package-id='${systemId}']:visible`).first();
 }
 
-/** The join form's user picker on 12: a <select> of user names. */
+/** The join form's user picker on 12 and 13: a <select> of user names. */
 export function joinUserDropdown(page: Page): Locator {
   return page.locator('select[name="userid"]');
 }
 
-/** The join form's user picker on 13+: an autocomplete textbox. */
+/** A user's entry in the 12–13 join dropdown, by exact name. */
+export function joinUserOption(page: Page, userName: string): Locator {
+  return joinUserDropdown(page).locator("option", { hasText: new RegExp(`^${escapeRegExp(userName)}$`) });
+}
+
+/** The join form's user picker on 14: an autocomplete textbox (input[name="username"]). */
 export function joinUserTextbox(page: Page): Locator {
   return page.getByRole("textbox", { name: "Select User" });
 }
 
 /**
- * A suggestion in the 13+ join autocomplete: the <li> inside #autocomplete,
+ * A suggestion in the 14 join autocomplete: the <li> inside #autocomplete,
  * NOT the wrapping <menu>, whose text also matches — clicking the wrapper
  * selects nothing and Join silently does nothing.
  */
 export function joinUserSuggestion(page: Page, userName: string): Locator {
   return page.locator("#autocomplete li", { hasText: new RegExp(`^${escapeRegExp(userName)}$`) });
+}
+
+/** The join form's access key input; input[name="password"] on 12–14. */
+export function joinPasswordField(page: Page): Locator {
+  return page.locator('input[name="password"]:visible').first();
 }
 
 /** The join form's submit button; same on 12–14. */

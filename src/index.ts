@@ -2,7 +2,7 @@
  * @scooper4711/foundry-test-kit — Playwright integration testing for
  * Foundry VTT modules.
  */
-export { loadTestKitConfig, type TestKitConfig, type WorldConfig, type SeedSetting } from "./config.js";
+export { loadTestKitConfig, testUser, type TestKitConfig, type WorldConfig, type SeedSetting } from "./config.js";
 export { defineFoundryConfig, type FoundryConfigOptions } from "./playwright-config.js";
 export {
   test,
@@ -14,14 +14,18 @@ export {
 export { FOUNDRY_VIEWPORT, testBaseUrl, suiteContextOptions, disableSceneCanvas } from "./context.js";
 export { clickPastPopups, dismissTours, dismissOverlays, ensureAdminAccess } from "./overlays.js";
 export { adminPasswordField } from "./foundry-ui.js";
+export { waitForGameReady, joinAsGamemaster, joinAsUser, joinAsPlayer } from "./join.js";
+export { enterGameAsGamemaster, ensureModuleActive, withGamemasterPage } from "./session.js";
 export {
-  waitForGameReady,
-  enterGameAsGamemaster,
-  joinAsGamemaster,
-  joinAsPlayer,
-  ensureModuleActive,
-  withGamemasterPage,
-} from "./session.js";
+  DEFAULT_GAMEMASTER_NAME,
+  DEFAULT_PLAYER_NAME,
+  USER_ROLE_LEVELS,
+  findSeedUser,
+  type UserRole,
+  type SeedUser,
+  type GamemasterAccount,
+  type SeedUsersConfig,
+} from "./users.js";
 export { startCoverage, stopCoverage, coverageChunkName, moduleBundleMarker, COVERAGE_RAW_DIR } from "./coverage.js";
 export {
   importPregen,

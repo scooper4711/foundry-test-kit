@@ -35,7 +35,7 @@ export async function seedFoundry(page: Page, options: SeedOptions): Promise<voi
   log(`  Systems: ${options.systemIds.join(", ")}`);
   log(`  World: ${options.worldTitle} (${systemDisplayName(options.worldSystem)})`);
   log(`  Module: ${options.moduleId} (${moduleStatus})`);
-  log(`  Users: Gamemaster (no password), ${options.playerName} (no password)`);
+  log(`  Users: ${describeUsers(options)}`);
 }
 
 export function seedOptionsFromEnv(env: NodeJS.ProcessEnv): SeedOptions {
@@ -58,8 +58,17 @@ export function seedOptionsFromEnv(env: NodeJS.ProcessEnv): SeedOptions {
     worldTitle: env.SEED_WORLD_TITLE ?? "Integration Test",
     moduleId: config.moduleId,
     settings: config.seed.settings,
-    playerName: "TestPlayer",
+    gamemaster: config.seed.gamemaster,
+    users: config.seed.users,
   };
+}
+
+function describeUsers({ gamemaster, users }: SeedOptions): string {
+  const access = (password: string) => (password ? "password" : "no password");
+  return [
+    `${gamemaster.name} (gamemaster, ${access(gamemaster.password)})`,
+    ...users.map((user) => `${user.name} (${user.role}, ${access(user.password)})`),
+  ].join(", ");
 }
 
 /**
