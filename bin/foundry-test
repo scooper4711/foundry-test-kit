@@ -416,6 +416,7 @@ run_world_suite() {
     npx playwright test --project="$system" --reporter=json,line
   status=$?
   set -e
+  kit_node cli/summarize.js "$result_json" || true
   return "$status"
 }
 
