@@ -256,9 +256,11 @@ Things to know about Foundry 12:
   of `globalThis` there. In `page.evaluate`, reach them through `CONFIG` —
   `CONFIG.Actor.documentClass.create(...)` — which works on every version.
 
-The kit's own CI seeds a Simple Worldbuilding world with a fixture module and
-runs its specs on `latest-12`, `latest-13` and `latest` (see
-`.github/workflows/e2e.yml` and `e2e/fixture-module/`).
+The kit's own E2E workflow seeds a Simple Worldbuilding world with a fixture
+module and runs its specs on `latest-12`, `latest-13` and `latest`, when a
+release is published and when run by hand (see `.github/workflows/e2e.yml` and
+`e2e/fixture-module/`). Changes to the browser-driven code are checked locally
+with `npm run e2e`, or by running the workflow by hand on the branch.
 
 ## Write tests
 
@@ -380,13 +382,33 @@ Get the caching right before you let it run regularly:
   `Cache restored from key: foundry-build-…` and must not show
   `Downloading Foundry VTT`. If it downloads again, fix the cache before
   running it any more.
-- **Fill the cache from the default branch.** A run can only restore caches saved
-  on its own branch or tag, or on the default branch. Run the workflow once by
-  hand on `main` after a new Foundry release, and release and pull-request runs
-  reuse that download.
+- **Fill the cache from the default branch.** A workflow that only runs on
+  releases never reuses its own caches (see
+  [Why release runs need a manual run on main](#why-release-runs-need-a-manual-run-on-main)).
+  Run it once by hand on the default branch after each new Foundry release.
 - **Don't let runs pile up:** the `concurrency` group cancels superseded runs.
 - **Keep your license out of caches:** the last step deletes `license.json` (see
   below).
+
+#### Why release runs need a manual run on main
+
+GitHub scopes every Actions cache entry to the branch or tag whose run saved
+it. A run can restore caches saved under its own ref, or under the default
+branch (and, for a pull request, its base branch), but not under any other
+branch or tag. A release runs under its tag: the `v1.2.0` run saves its caches
+under `refs/tags/v1.2.0`, and the `v1.3.0` run can't see them. It falls back to
+the default branch, and if the workflow never runs there, there is nothing to
+restore. Every release then downloads Foundry again, once per version in the
+matrix.
+
+The fix is the `workflow_dispatch` trigger: after a new Foundry release (when
+`latest` or `latest-<major>` resolves to a new version), run the workflow once
+by hand on the default branch (Actions → the workflow → Run workflow). That
+run downloads each build once and saves the caches under the default branch,
+where every later release run, and any manual run on another branch, restores
+them. A cache nobody restores for 7 days is deleted, and a repository's caches
+are capped at 10 GB in total (oldest evicted first), so run it again if a
+release log shows `Downloading Foundry VTT`.
 
 Add repository secrets `FOUNDRY_LICENSE_KEY`, `FOUNDRY_USERNAME` and
 `FOUNDRY_PASSWORD` (Settings → Secrets and variables → Actions). This workflow
