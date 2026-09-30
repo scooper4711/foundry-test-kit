@@ -2,6 +2,9 @@
 /dist/
 /coverage/
 /tmp/
+.foundry-test/
+test-results/
 .DS_Store
 .env
 .env.keys
+e2e/fixture-module/coverage/

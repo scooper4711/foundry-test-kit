@@ -191,10 +191,33 @@ Everything lives in `.foundry-test/` (the config's `workDir`): Foundry builds in
 `cache/FoundryVTT-Node-<version>.zip`, unpacked servers in `versions/`, one
 data directory per server and version (`Data-dev-14.367`, `Data-test-14.367`),
 server logs and results in `logs/`, and saved Gamemaster sessions in
-`sessions/`. Nothing in it belongs in version control.
+`sessions/`. Nothing in it belongs in version control. A world is seeded once:
+seeding leaves a `.seeded-<world>` marker in the data directory when it
+finishes, so a run interrupted mid-seed simply seeds again next time.
 A missing build is downloaded from foundryvtt.com with `FOUNDRY_USERNAME` and
 `FOUNDRY_PASSWORD` (your account must hold a license), or from a URL:
 `npx foundry-test test start https://…/FoundryVTT-Node-14.367.zip`.
+
+## Foundry versions
+
+The kit supports Foundry 12, 13 and 14, and rejects anything older. The same
+config, CLI, seeding and fixtures work on all three; the setup, join and
+world-creation screens differ between majors, and the kit's locators for them
+live in one file, `src/foundry-ui.ts`, each noting what differs.
+
+Things to know about Foundry 12:
+
+- It ignores the `--port` and `--world` command-line options, so the kit writes
+  them into the data directory's `Config/options.json` before starting it.
+- Under Node 24 it raises a permanent notification that comes back when
+  cleared. It runs fine; the kit stops clearing it after a couple of tries.
+- Document classes such as `Actor`, `User` and `ChatMessage` are not properties
+  of `globalThis` there. In `page.evaluate`, reach them through `CONFIG` —
+  `CONFIG.Actor.documentClass.create(...)` — which works on every version.
+
+The kit's own CI seeds a Simple Worldbuilding world with a fixture module and
+runs its specs on `latest-12`, `latest-13` and `latest` (see
+`.github/workflows/e2e.yml` and `e2e/fixture-module/`).
 
 ## Write tests
 

@@ -1,0 +1,8 @@
+{
+  "id": "foundry-test-kit-fixture",
+  "title": "foundry-test-kit fixture",
+  "description": "A minimal module the kit's own end-to-end run seeds and tests against.",
+  "version": "1.0.0",
+  "compatibility": { "minimum": "12", "verified": "14" },
+  "esmodules": ["dist/main.js"]
+}
