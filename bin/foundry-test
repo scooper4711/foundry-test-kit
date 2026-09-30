@@ -416,10 +416,16 @@ do_start() {
   exit 1
 }
 
-# Seeding writes this marker only once it completes, so a run interrupted
-# after the world folder was created is seeded again (seeding is idempotent).
+# Seeding writes this marker, holding a fingerprint of the seed config,
+# only once it completes. A run interrupted after the world folder was
+# created, or a changed config (users, settings, systems), seeds again;
+# seeding is idempotent.
 seed_marker() {
   echo "$DATA_DIR/.seeded-$WORLD_DIR_NAME"
+}
+
+seed_config_hash() {
+  kit_node cli/shell-config.js seed-hash "$WORLD_ID"
 }
 
 # Foundry binds the signed license to the machine, so a data directory
@@ -442,12 +448,19 @@ relicense_server() {
 
 seed_if_needed() {
   if [ -z "$WORLD_ID" ]; then return 0; fi
+  local config_hash
+  config_hash="$(seed_config_hash)"
   if [ -f "$(seed_marker)" ]; then
-    if license_verified; then
+    local seeded_hash
+    seeded_hash="$(cat "$(seed_marker)")"
+    if [ "$seeded_hash" = "$config_hash" ] && license_verified; then
       echo "World $WORLD_DIR_NAME already seeded — skipping seed."
       return 0
     fi
-    relicense_server
+    if [ "$seeded_hash" != "$config_hash" ]; then
+      echo "Seed config changed since $WORLD_DIR_NAME was seeded — re-seeding."
+    fi
+    if ! license_verified; then relicense_server; fi
   fi
   if [ -z "${FOUNDRY_LICENSE_KEY:-}" ]; then
     echo "ERROR: fresh data dir needs FOUNDRY_LICENSE_KEY (seeding $WORLD_DIR_NAME)." >&2
@@ -461,7 +474,7 @@ seed_if_needed() {
   SEED_WORLD_TITLE="$WORLD_TITLE" \
   FOUNDRY_VERSION="$VERSION" \
     kit_node seed/cli.js || { echo "ERROR: seeding $WORLD_DIR_NAME failed." >&2; exit 1; }
-  touch "$(seed_marker)"
+  echo "$config_hash" > "$(seed_marker)"
 }
 
 # World the running server was started with (4th line of the pid file).

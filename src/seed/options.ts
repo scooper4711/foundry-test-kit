@@ -3,6 +3,7 @@
  * setup screens use for game systems.
  */
 import type { SeedSetting } from "../config.js";
+import type { GamemasterAccount, SeedUser } from "../users.js";
 
 export interface SeedOptions {
   baseUrl: string;
@@ -16,7 +17,10 @@ export interface SeedOptions {
   moduleId: string;
   /** Module settings written once the module is enabled. */
   settings: SeedSetting[];
-  playerName: string;
+  /** The Gamemaster account the world's own Gamemaster is renamed to. */
+  gamemaster: GamemasterAccount;
+  /** Extra users created (or brought in line) in the world. */
+  users: SeedUser[];
 }
 
 /** Display names as shown in the Foundry setup package and world lists. */

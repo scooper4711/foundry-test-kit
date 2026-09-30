@@ -9,7 +9,8 @@ what every module suite ends up writing by hand:
   side, seeds fresh worlds, and runs your Playwright suite against each
   configured world (one project per game system).
 - **World seeding** — license key, EULA, game system installs, world creation,
-  module activation, module settings, and a passwordless `TestPlayer`.
+  module activation, module settings, and test users at whatever
+  permission levels your specs need.
 - **Fixtures** — a `test` whose `gmPage` is already inside the world as the
   Gamemaster (logged in once per worker), with Foundry's scene canvas turned
   off, and V8 coverage of your module recorded for every test.
@@ -71,6 +72,8 @@ Add `foundry-test.config.json` at your project root:
 | `devWorld`        | World `foundry-test dev start` boots into                                                         | `dev-test`                        |
 | `systems`         | Game systems installed when seeding a data directory                                              | every system named by a world     |
 | `seed.settings`   | Module settings written into freshly seeded worlds (`value`, or `fromEnv` — skipped when unset)   | none                              |
+| `seed.gamemaster` | The world's Gamemaster: `name`, optional `password` (see [Test users](#test-users))               | `Gamemaster`, no password         |
+| `seed.users`      | Extra users: `name`, `role`, optional `password` (see [Test users](#test-users))                  | one `TestPlayer` player           |
 | `coverage.bundle` | Your built bundle, relative to the project root (must have a sourcemap)                           | `dist/main.js`                    |
 | `workDir`         | Where the kit keeps Foundry builds, servers, data directories, logs, and sessions                 | `.foundry-test`                   |
 
@@ -198,6 +201,44 @@ A missing build is downloaded from foundryvtt.com with `FOUNDRY_USERNAME` and
 `FOUNDRY_PASSWORD` (your account must hold a license), or from a URL:
 `npx foundry-test test start https://…/FoundryVTT-Node-14.367.zip`.
 
+## Test users
+
+Every seeded world gets a Gamemaster and the users listed under `seed.users`:
+
+```json
+{
+  "seed": {
+    "gamemaster": { "name": "Game Master" },
+    "users": [
+      { "name": "Pat", "role": "player" },
+      { "name": "Tess", "role": "trusted" },
+      { "name": "Ada", "role": "assistant" }
+    ]
+  }
+}
+```
+
+- `role` is one of `player` (the default), `trusted`, `assistant` or `gamemaster`,
+  Foundry's permission levels.
+- Passwords are optional, and nobody has one unless you set `password`. Test
+  users rarely need one; the option is there for code that behaves differently
+  with an access key.
+- The Gamemaster is the one Foundry creates with every world: the kit renames it
+  to `seed.gamemaster.name` and joins as it.
+- Without `seed.users`, the kit seeds one player, `TestPlayer`. An empty list
+  seeds none.
+- Changing any of this re-seeds the world on the next run. Seeding records a
+  fingerprint of the seed config, and existing users are updated in place.
+
+In specs, name users through the config rather than repeating them:
+
+```ts
+import { joinAsPlayer, joinAsUser, testUser } from "@scooper4711/foundry-test-kit";
+
+await joinAsPlayer(page); // the first configured player
+await joinAsUser(page, testUser("trusted").name); // any role; its password comes from the config
+```
+
 ## Foundry versions
 
 The kit supports Foundry 12, 13 and 14, and rejects anything older. The same
@@ -261,10 +302,10 @@ Joining as a player needs its own context:
 const context = await browser.newContext(suiteContextOptions());
 await disableSceneCanvas(context);
 const page = await context.newPage();
-await joinAsPlayer(page, "TestPlayer");
+await joinAsPlayer(page); // or joinAsUser(page, testUser("trusted").name)
 ```
 
-Other helpers: `joinAsGamemaster`, `enterGameAsGamemaster`, `waitForGameReady`,
+Other helpers: `joinAsGamemaster`, `testUser`, `enterGameAsGamemaster`, `waitForGameReady`,
 `ensureModuleActive`, `dismissOverlays`, `dismissTours`, `ensureAdminAccess`,
 `createParty`, `deleteActorsByPrefix`, `deleteChatMessages`, `setSetting`,
 `updateActor`, `readActorFlag`, `assignCharacterToUser`, `renderActorSheet`,

@@ -13,6 +13,7 @@ export default defineConfig({
         "src/fixtures.ts",
         "src/foundry-ui.ts",
         "src/overlays.ts",
+        "src/join.ts",
         "src/session.ts",
         "src/world.ts",
         "src/seed/finish.ts",

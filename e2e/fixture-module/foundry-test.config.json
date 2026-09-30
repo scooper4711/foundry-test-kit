@@ -3,5 +3,13 @@
   "foundryVersion": "latest",
   "testWorlds": [{ "id": "kit-e2e", "system": "worldbuilding", "title": "Kit E2E" }],
   "devWorld": { "id": "kit-e2e-dev", "system": "worldbuilding", "title": "Kit E2E Dev" },
+  "seed": {
+    "gamemaster": { "name": "Kit GM", "password": "kit-gm-key" },
+    "users": [
+      { "name": "Kit Player", "role": "player" },
+      { "name": "Kit Trusted", "role": "trusted", "password": "kit-trusted-key" },
+      { "name": "Kit Assistant", "role": "assistant" }
+    ]
+  },
   "coverage": { "bundle": "dist/main.js" }
 }

@@ -10,7 +10,8 @@ import { test as base, expect, type Page } from "@playwright/test";
 import { loadTestKitConfig } from "./config.js";
 import { disableSceneCanvas, suiteContextOptions, testBaseUrl } from "./context.js";
 import { coverageChunkName, startCoverage, stopCoverage } from "./coverage.js";
-import { enterGameAsGamemaster, joinAsGamemaster } from "./session.js";
+import { joinAsGamemaster } from "./join.js";
+import { enterGameAsGamemaster } from "./session.js";
 import { gameSystemId } from "./world.js";
 
 export { expect };
