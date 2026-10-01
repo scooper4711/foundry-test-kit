@@ -14,10 +14,47 @@ what every module suite ends up writing by hand:
 - **Fixtures** — a `test` whose `gmPage` is already inside the world as the
   Gamemaster (logged in once per worker), with Foundry's scene canvas turned
   off, and V8 coverage of your module recorded for every test.
-- **Helpers** — joining as GM or player, clearing first-run popups, importing
-  pregenerated characters, parties, settings, flags, and cleanup.
+- **Helpers** — joining as GM or player, clearing first-run popups, typed
+  document access (find an actor by id, name, or flag; wait for actors and
+  settings; create, update, delete any document), pregenerated characters,
+  parties, settings, flags, and cleanup.
+- **`foundry-test init`** — scaffolds the config, a Playwright config, a smoke
+  spec, and npm scripts from your `module.json`.
 - **`foundry-test-coverage`** — maps the recorded coverage back onto your
   module's source files through its sourcemap.
+
+## foundry-test-kit or @thefehr/foundry-playwright?
+
+[@thefehr/foundry-playwright](https://github.com/TheFehr/foundry-playwright) is
+another Playwright library for Foundry modules, older than this kit and with a
+broader toolbox for writing test steps. They overlap but are built around
+different ideas: it is a library your tests call to set up and drive Foundry,
+often in Docker; this kit is a harness that owns the server and pre-seeded
+worlds, so specs start inside a ready world.
+
+Choose **@thefehr/foundry-playwright** when you want:
+
+- game-system and sheet UI adapters (dnd5e, PF2e, Tidy5e), canvas and token
+  interaction, and drag-and-drop simulation;
+- hooks, sockets, rolls, currency, ownership, and other state helpers;
+- per-test isolation by restoring a world backup;
+- Foundry in Docker containers.
+
+Choose **foundry-test-kit** when you want:
+
+- no Docker: Foundry runs as a plain Node process, with separate dev and test
+  servers;
+- coverage of your module's own source, mapped through its sourcemap, so you
+  can gate on integration coverage;
+- worlds seeded once from a config file (license, systems, module settings,
+  users by role) and reused, with the Gamemaster logged in once per worker;
+- several game systems in one suite, one Playwright project per world;
+- Foundry 12 through 14, with `latest` and `latest-<major>` resolved for you;
+- careful downloading for CI (see [Continuous integration](#continuous-integration)).
+
+They can work together: the kit's fixtures give you a Playwright `Page`, which
+is all @thefehr/foundry-playwright's `FoundryState`, `FoundryUI`, and
+`FoundryCanvas` classes need.
 
 ## Why the scene canvas is off
 
@@ -39,6 +76,20 @@ npx playwright install chromium
 ```
 
 Requires Node 24+ (Foundry 14 needs it too) and bash.
+
+Then, from your module's root (next to `module.json`):
+
+```bash
+npx foundry-test init
+```
+
+It writes `foundry-test.config.json` (a test world per game system your
+`module.json` declares, or Simple Worldbuilding if it declares none; your
+first `esmodules` entry as the coverage bundle), `playwright.config.mts`, a
+smoke spec in `tests/integration/`, an `integration` script plus
+`integration:v<major>` for each older Foundry major in your compatibility
+range, and `.gitignore` entries. It never overwrites a file or script that
+already exists. The rest of this section describes what it writes.
 
 ## Configure
 
@@ -306,6 +357,26 @@ await disableSceneCanvas(context);
 const page = await context.newPage();
 await joinAsPlayer(page); // or joinAsUser(page, testUser("trusted").name)
 ```
+
+Read and change documents without writing `page.evaluate` boilerplate. Name an
+actor by `id`, `name`, or a module flag; functions passed to `evaluate` and
+`waitFor` run in the browser, typed, like `page.evaluate` callbacks (they can
+use their arguments and Foundry's globals, not the spec's variables):
+
+```ts
+import { actorOn, createDocuments, waitForSetting } from "@scooper4711/foundry-test-kit";
+
+const hero = actorOn(gmPage, { flag: { scope: "my-module", key: "characterId", value: "abc" } });
+const hp = await hero.evaluate((actor) => actor.system.attributes.hp.value);
+await hero.evaluate((actor, value) => actor.update({ "system.attributes.hp.value": value }), 3);
+await hero.waitFor((actor) => actor.getFlag("my-module", "syncing") !== true);
+
+await waitForSetting(gmPage, { scope: "my-module", key: "writeLevel", value: "full" });
+const [rope] = await createDocuments(gmPage, "Item", [{ name: "Rope", type: "equipment" }]);
+```
+
+`updateDocuments` and `deleteDocuments` work the same way for any document
+type.
 
 Other helpers: `joinAsGamemaster`, `testUser`, `enterGameAsGamemaster`, `waitForGameReady`,
 `ensureModuleActive`, `dismissOverlays`, `dismissTours`, `ensureAdminAccess`,
