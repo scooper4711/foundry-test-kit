@@ -26,6 +26,19 @@ export {
   type GamemasterAccount,
   type SeedUsersConfig,
 } from "./users.js";
+export {
+  actorOn,
+  waitForSetting,
+  createDocuments,
+  updateDocuments,
+  deleteDocuments,
+  type ActorRef,
+  type PageActor,
+  type FoundryActor,
+  type FoundryDocument,
+  type FoundryCollection,
+  type WaitOptions,
+} from "./documents.js";
 export { startCoverage, stopCoverage, coverageChunkName, moduleBundleMarker, COVERAGE_RAW_DIR } from "./coverage.js";
 export {
   importPregen,
