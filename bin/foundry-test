@@ -13,6 +13,8 @@ set -euo pipefail
 #   foundry-test test run [--version VER|URL] [--world ID] [--keep] [--clean]
 #   foundry-test test run --all-worlds [...]
 #   foundry-test resolve latest|latest-<major>   (prints e.g. 14.368)
+#   foundry-test init   (from a module's root: scaffolds the config, a
+#                        Playwright config, a smoke spec, and npm scripts)
 #
 # `run` runs the Playwright project named after the world's game system.
 # --all-worlds runs every world in the config's testWorlds in turn (or
@@ -69,6 +71,12 @@ if [ "${1:-}" = "resolve" ]; then
   exit $?
 fi
 
+# `foundry-test init` creates the config, so it runs before loading one.
+if [ "${1:-}" = "init" ]; then
+  kit_node cli/init.js
+  exit $?
+fi
+
 # Project settings from foundry-test.config.json (KIT_* variables).
 KIT_CONFIG="$(kit_node cli/shell-config.js env)" || exit 1
 eval "$KIT_CONFIG"
@@ -100,7 +108,7 @@ HEADED=0
 ALL_WORLDS=0
 
 usage() {
-  grep '^#' "$(resolve_script "$0")" | sed -E 's/^# ?//' | head -n 45
+  grep '^#' "$(resolve_script "$0")" | sed -E 's/^# ?//' | head -n 47
   exit "${1:-0}"
 }
 

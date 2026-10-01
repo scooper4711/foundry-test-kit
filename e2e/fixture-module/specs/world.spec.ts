@@ -3,7 +3,10 @@
  * the world, the module, the fixtures, and the generic world helpers.
  */
 import {
+  actorOn,
+  createDocuments,
   deleteActorsByPrefix,
+  deleteDocuments,
   disableSceneCanvas,
   joinAsPlayer,
   joinAsUser,
@@ -13,6 +16,8 @@ import {
   suiteContextOptions,
   test,
   testUser,
+  updateDocuments,
+  waitForSetting,
   expect,
   USER_ROLE_LEVELS,
 } from "@scooper4711/foundry-test-kit";
@@ -66,6 +71,27 @@ test("world helpers create, flag, and clean up actors", async ({ gmPage }) => {
     actorId
   );
   expect(remaining).toBeNull();
+  await setSetting(gmPage, "core", "time", 0);
+});
+
+test("document helpers find, change, and wait on actors and settings", async ({ gmPage }) => {
+  const [actorId] = await createDocuments(gmPage, "Actor", [
+    { name: "KIT Docs", type: "character", flags: { [MODULE_ID]: { probe: "docs-1", tokens: ["busy"] } } },
+  ]);
+  const actor = actorOn(gmPage, { flag: { scope: MODULE_ID, key: "probe", value: "docs-1" } });
+  expect(await actor.id()).toBe(actorId);
+
+  await updateDocuments(gmPage, "Actor", [{ _id: actorId!, name: "KIT Docs Renamed" }]);
+  expect(await actorOn(gmPage, { id: actorId! }).evaluate((found) => found.name)).toBe("KIT Docs Renamed");
+
+  await actor.evaluate((found, scope) => found.setFlag(scope, "tokens", []), MODULE_ID);
+  await actor.waitFor((found, scope) => (found.getFlag(scope, "tokens") as unknown[]).length === 0, MODULE_ID);
+
+  await setSetting(gmPage, "core", "time", 42);
+  await waitForSetting(gmPage, { scope: "core", key: "time", value: 42 });
+
+  await deleteDocuments(gmPage, "Actor", [actorId!]);
+  await expect(actorOn(gmPage, { id: actorId! }).id()).rejects.toThrow(/no actor matches/);
   await setSetting(gmPage, "core", "time", 0);
 });
 
